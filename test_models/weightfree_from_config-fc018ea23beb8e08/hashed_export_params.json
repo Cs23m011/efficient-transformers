@@ -1,0 +1,1693 @@
+{
+    "applied_transform_names":[
+        "AwqToMatmulNbitsTransform",
+        "GPTQToMatmulNbitsTransform",
+        "FP8DeQuantLinearToLinearTransform",
+        "Mxfp4GptOssExpertDequantizeTransform",
+        "CustomOpsTransform",
+        "KVCacheTransform",
+        "SplitGateUpWeightsTransform",
+        "KVCacheExternalModuleMapperTransform",
+        "RewriteUnsupportedOpsTransform"
+    ],
+    "config":{
+        "architectures":[
+            "LlamaForCausalLM"
+        ],
+        "attention_bias":false,
+        "attention_dropout":0.0,
+        "bos_token_id":128000,
+        "dtype":"float32",
+        "eos_token_id":[
+            128001,
+            128008,
+            128009
+        ],
+        "head_dim":128,
+        "hidden_act":"silu",
+        "hidden_size":8192,
+        "initializer_range":0.02,
+        "intermediate_size":28672,
+        "max_position_embeddings":131072,
+        "max_seq_len_cached":null,
+        "mlp_bias":false,
+        "model_type":"llama",
+        "num_attention_heads":64,
+        "num_hidden_layers":80,
+        "num_key_value_heads":8,
+        "pretraining_tp":1,
+        "rms_norm_eps":1e-05,
+        "rope_scaling":{
+            "factor":8.0,
+            "high_freq_factor":4.0,
+            "low_freq_factor":1.0,
+            "original_max_position_embeddings":8192,
+            "rope_type":"llama3"
+        },
+        "rope_theta":500000.0,
+        "tie_word_embeddings":false,
+        "transformers_version":"4.57.3",
+        "use_cache":true,
+        "vocab_size":128256
+    },
+    "export_params":{
+        "dynamic_axes":{
+            "input_ids":{
+                "0":"batch_size",
+                "1":"seq_len"
+            },
+            "past_key.0":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.1":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.10":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.11":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.12":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.13":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.14":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.15":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.16":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.17":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.18":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.19":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.2":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.20":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.21":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.22":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.23":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.24":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.25":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.26":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.27":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.28":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.29":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.3":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.30":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.31":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.32":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.33":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.34":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.35":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.36":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.37":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.38":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.39":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.4":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.40":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.41":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.42":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.43":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.44":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.45":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.46":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.47":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.48":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.49":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.5":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.50":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.51":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.52":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.53":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.54":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.55":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.56":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.57":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.58":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.59":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.6":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.60":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.61":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.62":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.63":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.64":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.65":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.66":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.67":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.68":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.69":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.7":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.70":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.71":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.72":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.73":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.74":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.75":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.76":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.77":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.78":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.79":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.8":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_key.9":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.0":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.1":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.10":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.11":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.12":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.13":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.14":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.15":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.16":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.17":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.18":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.19":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.2":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.20":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.21":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.22":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.23":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.24":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.25":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.26":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.27":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.28":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.29":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.3":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.30":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.31":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.32":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.33":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.34":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.35":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.36":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.37":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.38":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.39":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.4":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.40":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.41":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.42":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.43":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.44":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.45":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.46":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.47":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.48":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.49":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.5":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.50":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.51":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.52":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.53":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.54":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.55":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.56":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.57":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.58":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.59":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.6":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.60":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.61":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.62":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.63":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.64":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.65":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.66":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.67":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.68":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.69":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.7":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.70":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.71":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.72":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.73":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.74":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.75":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.76":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.77":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.78":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.79":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.8":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "past_value.9":{
+                "0":"batch_size",
+                "2":"ctx_len"
+            },
+            "position_ids":{
+                "0":"batch_size",
+                "1":"seq_len"
+            }
+        },
+        "dynamic_shapes":{
+            "input_ids":{
+                "0":"Dim('batch_size', max=64)",
+                "1":"Dim('seq_len', max=131072)"
+            },
+            "past_key_values":[
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ],
+                [
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    },
+                    {
+                        "0":"Dim('batch_size', max=64)",
+                        "2":"Dim('ctx_len', max=131072)"
+                    }
+                ]
+            ],
+            "position_ids":{
+                "0":"Dim('batch_size', max=64)",
+                "1":"Dim('seq_len', max=131072)"
+            }
+        },
+        "output_names":[
+            "logits",
+            "past_key.0_RetainedState",
+            "past_value.0_RetainedState",
+            "past_key.1_RetainedState",
+            "past_value.1_RetainedState",
+            "past_key.2_RetainedState",
+            "past_value.2_RetainedState",
+            "past_key.3_RetainedState",
+            "past_value.3_RetainedState",
+            "past_key.4_RetainedState",
+            "past_value.4_RetainedState",
+            "past_key.5_RetainedState",
+            "past_value.5_RetainedState",
+            "past_key.6_RetainedState",
+            "past_value.6_RetainedState",
+            "past_key.7_RetainedState",
+            "past_value.7_RetainedState",
+            "past_key.8_RetainedState",
+            "past_value.8_RetainedState",
+            "past_key.9_RetainedState",
+            "past_value.9_RetainedState",
+            "past_key.10_RetainedState",
+            "past_value.10_RetainedState",
+            "past_key.11_RetainedState",
+            "past_value.11_RetainedState",
+            "past_key.12_RetainedState",
+            "past_value.12_RetainedState",
+            "past_key.13_RetainedState",
+            "past_value.13_RetainedState",
+            "past_key.14_RetainedState",
+            "past_value.14_RetainedState",
+            "past_key.15_RetainedState",
+            "past_value.15_RetainedState",
+            "past_key.16_RetainedState",
+            "past_value.16_RetainedState",
+            "past_key.17_RetainedState",
+            "past_value.17_RetainedState",
+            "past_key.18_RetainedState",
+            "past_value.18_RetainedState",
+            "past_key.19_RetainedState",
+            "past_value.19_RetainedState",
+            "past_key.20_RetainedState",
+            "past_value.20_RetainedState",
+            "past_key.21_RetainedState",
+            "past_value.21_RetainedState",
+            "past_key.22_RetainedState",
+            "past_value.22_RetainedState",
+            "past_key.23_RetainedState",
+            "past_value.23_RetainedState",
+            "past_key.24_RetainedState",
+            "past_value.24_RetainedState",
+            "past_key.25_RetainedState",
+            "past_value.25_RetainedState",
+            "past_key.26_RetainedState",
+            "past_value.26_RetainedState",
+            "past_key.27_RetainedState",
+            "past_value.27_RetainedState",
+            "past_key.28_RetainedState",
+            "past_value.28_RetainedState",
+            "past_key.29_RetainedState",
+            "past_value.29_RetainedState",
+            "past_key.30_RetainedState",
+            "past_value.30_RetainedState",
+            "past_key.31_RetainedState",
+            "past_value.31_RetainedState",
+            "past_key.32_RetainedState",
+            "past_value.32_RetainedState",
+            "past_key.33_RetainedState",
+            "past_value.33_RetainedState",
+            "past_key.34_RetainedState",
+            "past_value.34_RetainedState",
+            "past_key.35_RetainedState",
+            "past_value.35_RetainedState",
+            "past_key.36_RetainedState",
+            "past_value.36_RetainedState",
+            "past_key.37_RetainedState",
+            "past_value.37_RetainedState",
+            "past_key.38_RetainedState",
+            "past_value.38_RetainedState",
+            "past_key.39_RetainedState",
+            "past_value.39_RetainedState",
+            "past_key.40_RetainedState",
+            "past_value.40_RetainedState",
+            "past_key.41_RetainedState",
+            "past_value.41_RetainedState",
+            "past_key.42_RetainedState",
+            "past_value.42_RetainedState",
+            "past_key.43_RetainedState",
+            "past_value.43_RetainedState",
+            "past_key.44_RetainedState",
+            "past_value.44_RetainedState",
+            "past_key.45_RetainedState",
+            "past_value.45_RetainedState",
+            "past_key.46_RetainedState",
+            "past_value.46_RetainedState",
+            "past_key.47_RetainedState",
+            "past_value.47_RetainedState",
+            "past_key.48_RetainedState",
+            "past_value.48_RetainedState",
+            "past_key.49_RetainedState",
+            "past_value.49_RetainedState",
+            "past_key.50_RetainedState",
+            "past_value.50_RetainedState",
+            "past_key.51_RetainedState",
+            "past_value.51_RetainedState",
+            "past_key.52_RetainedState",
+            "past_value.52_RetainedState",
+            "past_key.53_RetainedState",
+            "past_value.53_RetainedState",
+            "past_key.54_RetainedState",
+            "past_value.54_RetainedState",
+            "past_key.55_RetainedState",
+            "past_value.55_RetainedState",
+            "past_key.56_RetainedState",
+            "past_value.56_RetainedState",
+            "past_key.57_RetainedState",
+            "past_value.57_RetainedState",
+            "past_key.58_RetainedState",
+            "past_value.58_RetainedState",
+            "past_key.59_RetainedState",
+            "past_value.59_RetainedState",
+            "past_key.60_RetainedState",
+            "past_value.60_RetainedState",
+            "past_key.61_RetainedState",
+            "past_value.61_RetainedState",
+            "past_key.62_RetainedState",
+            "past_value.62_RetainedState",
+            "past_key.63_RetainedState",
+            "past_value.63_RetainedState",
+            "past_key.64_RetainedState",
+            "past_value.64_RetainedState",
+            "past_key.65_RetainedState",
+            "past_value.65_RetainedState",
+            "past_key.66_RetainedState",
+            "past_value.66_RetainedState",
+            "past_key.67_RetainedState",
+            "past_value.67_RetainedState",
+            "past_key.68_RetainedState",
+            "past_value.68_RetainedState",
+            "past_key.69_RetainedState",
+            "past_value.69_RetainedState",
+            "past_key.70_RetainedState",
+            "past_value.70_RetainedState",
+            "past_key.71_RetainedState",
+            "past_value.71_RetainedState",
+            "past_key.72_RetainedState",
+            "past_value.72_RetainedState",
+            "past_key.73_RetainedState",
+            "past_value.73_RetainedState",
+            "past_key.74_RetainedState",
+            "past_value.74_RetainedState",
+            "past_key.75_RetainedState",
+            "past_value.75_RetainedState",
+            "past_key.76_RetainedState",
+            "past_value.76_RetainedState",
+            "past_key.77_RetainedState",
+            "past_value.77_RetainedState",
+            "past_key.78_RetainedState",
+            "past_value.78_RetainedState",
+            "past_key.79_RetainedState",
+            "past_value.79_RetainedState"
+        ]
+    },
+    "max_seq_len_cached":null,
+    "onnx_subfunction_version":2,
+    "onnx_transform_version":1,
+    "peft_config":null,
+    "pretrained_model_name_or_path":"meta-llama/Llama-3.3-70B-Instruct",
+    "qaic_config":null,
+    "qeff_auto_class":"QEFFAutoModelForCausalLM",
+    "target_classnames":[
+        "QEffLlamaDecoderLayer"
+    ],
+    "use_dynamo":true,
+    "use_onnx_subfunctions":true,
+    "use_weight_free_export":true
+}

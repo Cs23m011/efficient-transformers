@@ -6,17 +6,18 @@
 # -----------------------------------------------------------------------------
 
 import json
+import os
 import time
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-import numpy as np
+
 import onnx
-import onnxruntime as ort
 import torch
 from accelerate import init_empty_weights
 from safetensors.torch import load_file, save_file
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 
-from QEfficient.exporter.weight_free import _default_weights_roots ,load_weight_free_ort_inputs
+from QEfficient.exporter.weight_free import _default_weights_roots
 from QEfficient.exporter.weight_spec import (
     ExternalDataFile,
     load_weight_spec,
@@ -27,14 +28,54 @@ from QEfficient.transformers.models.modeling_auto import QEFFAutoModelForCausalL
 from QEfficient.utils.run_utils import ApiRunner
 
 
-def convert_checkpoint_to_fp32(onnx_path: Path, weight_spec_path: Path) -> None:
+def _convert_single_shard(args) -> str:
+    """Convert a single safetensors shard to FP32. Runs in a separate process."""
+    abs_path, out_path, out_name = args
+    tensors = load_file(str(abs_path))
+    src_dtype = next(iter(tensors.values())).dtype
+    fp32_tensors = {k: v.to(torch.float32) for k, v in tensors.items()}
+    save_file(fp32_tensors, str(out_path))
+    return f"  {Path(abs_path).name}  ({src_dtype})  →  {out_name}  (float32)"
+
+
+def _get_default_workers() -> int:
+    """
+    Determine a safe default number of parallel workers.
+
+    Strategy:
+      - Use at most half the available CPUs to avoid starving other users on
+        shared clusters.
+      - Cap at 8 to limit memory pressure (each worker loads a full shard into
+        RAM twice: source + converted).
+      - Respect the CHECKPOINT_CONVERT_WORKERS env var if set, so cluster
+        admins or job schedulers can enforce limits.
+    """
+    override = os.environ.get("CHECKPOINT_CONVERT_WORKERS")
+    if override is not None:
+        return max(1, int(override))
+
+    available = os.cpu_count() or 4
+    return min(max(1, available // 2), 8)
+
+
+def convert_checkpoint_to_fp32(onnx_path: Path, weight_spec_path: Path, max_workers: int = None) -> None:
     """
     Load each safetensors checkpoint file, cast all tensors to FP32,
     save next to the ONNX, and update weight_spec.json to point there.
 
     This ensures the compiler sees matching dtypes between the ONNX (FLOAT)
     and the safetensors files (also FLOAT after conversion).
+
+    Shards are converted in parallel using multiple processes.
+
+    Args:
+        max_workers: Number of parallel processes. If None, auto-detects using
+                     half the available CPUs (capped at 8). Can also be
+                     controlled via CHECKPOINT_CONVERT_WORKERS env var.
     """
+    if max_workers is None:
+        max_workers = _get_default_workers()
+
     spec = load_weight_spec(weight_spec_path)
     export_dir = onnx_path.parent
     candidate_roots = _default_weights_roots(weight_spec_path, spec)
@@ -55,6 +96,8 @@ def convert_checkpoint_to_fp32(onnx_path: Path, weight_spec_path: Path) -> None:
         _sync_embedded_extdata(onnx_path, weight_spec_path)
         return
 
+    # Resolve all shard paths and prepare work items
+    work_items = []
     new_files = []
     for idx, ext_file in enumerate(spec.files):
         rel_path = Path(ext_file.path)
@@ -68,13 +111,17 @@ def convert_checkpoint_to_fp32(onnx_path: Path, weight_spec_path: Path) -> None:
         if abs_path is None or not abs_path.exists():
             raise FileNotFoundError(f"Cannot resolve external data file: {ext_file.path}")
 
-        tensors = load_file(str(abs_path))
-        fp32_tensors = {k: v.to(torch.float32) for k, v in tensors.items()}
-
         out_name = f"model_{idx:04d}.safetensors" if len(spec.files) > 1 else "model.safetensors"
-        save_file(fp32_tensors, str(export_dir / out_name))
+        out_path = export_dir / out_name
+        work_items.append((str(abs_path), str(out_path), out_name))
         new_files.append(ExternalDataFile(path=out_name, format="safetensors"))
-        print(f"  {abs_path.name}  ({next(iter(tensors.values())).dtype})  →  {out_name}  (float32)")
+
+    # Convert shards in parallel
+    print(f"Converting {len(work_items)} shards using {max_workers} workers ...")
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(_convert_single_shard, item): idx for idx, item in enumerate(work_items)}
+        for future in as_completed(futures):
+            print(future.result())
 
     spec.files = new_files
     save_weight_spec(weight_spec_path, spec)
@@ -95,8 +142,8 @@ def _sync_embedded_extdata(onnx_path: Path, weight_spec_path: Path) -> None:
     tmp.replace(onnx_path)
 
 
-#model_name = "meta-llama/Llama-3.3-70B-Instruct"
-model_name = "meta-llama/Llama-3.2-1B"
+model_name = "meta-llama/Llama-3.3-70B-Instruct"
+#model_name = "meta-llama/Llama-3.2-1B"
 # model_name = "gpt2"
 # model_name = "hf-internal-testing/tiny-random-LlamaForCausalLM"
 
@@ -129,7 +176,7 @@ qeff_model = QEFFAutoModelForCausalLM(
     continuous_batching=CONTINUOUS_BATCHING,
 )
 
-export_dir = Path("test_models/weightfree_from_config")
+export_dir = Path("test_models1/weightfree_from_config")
 export_start = time.perf_counter()
 onnx_path = Path(
     qeff_model.export(
@@ -151,59 +198,59 @@ convert_checkpoint_to_fp32(onnx_path, weight_spec_path)
 fp32_convert_time=time.perf_counter()-fp32_convert_time_start
 print(f"fp32 convert time: {fp32_convert_time:.3f} sec")
 print("Compiling weight-free ONNX ...")
-compile_start = time.perf_counter()
-qpc_path = qeff_model.compile(
-    onnx_path=str(onnx_path),
-    compile_dir=str(onnx_path.parent / "qpc"),
-    prefill_seq_len=8,
-    ctx_len=32,
-    num_devices=4,
-    mxfp6_matmul=True,
-    mxint8_kv_cache=True,
-    use_dynamo=True,
-    use_onnx_subfunctions=True,
-    use_weight_free_export=True,
-)
-compile_time = time.perf_counter()-compile_start
-print(f"compile time: {compile_time:.3f} sec")
-print(f"QPC: {qpc_path}")
+# compile_start = time.perf_counter()
+# qpc_path = qeff_model.compile(
+#     onnx_path=str(onnx_path),
+#     compile_dir=str(onnx_path.parent / "qpc"),
+#     prefill_seq_len=8,
+#     ctx_len=32,
+#     num_devices=4,
+#     mxfp6_matmul=True,
+#     mxint8_kv_cache=True,
+#     use_dynamo=True,
+#     use_onnx_subfunctions=True,
+#     use_weight_free_export=True,
+# )
+# compile_time = time.perf_counter()-compile_start
+# print(f"compile time: {compile_time:.3f} sec")
+# print(f"QPC: {qpc_path}")
 
-session = ort.InferenceSession(str(onnx_path))
-ort_inputs = load_weight_free_ort_inputs(weight_spec_path, runner.input_handler.prepare_ort_inputs())
-ort_outputs = runner.run_ort_session(ort_inputs, session)
-ort_outputs = runner.input_handler.update_ort_outputs(ort_outputs)
+# session = ort.InferenceSession(str(onnx_path))
+# ort_inputs = load_weight_free_ort_inputs(weight_spec_path, runner.input_handler.prepare_ort_inputs())
+# ort_outputs = runner.run_ort_session(ort_inputs, session)
+# ort_outputs = runner.input_handler.update_ort_outputs(ort_outputs)
 
-generated_ids = []
-for _ in range(1, runner.gen_len):
-    generated_ids.append(ort_outputs["logits"].argmax(-1).reshape(-1, 1))
-    ort_inputs = runner.input_handler.update_ort_inputs(ort_inputs, ort_outputs)
-    ort_inputs = load_weight_free_ort_inputs(weight_spec_path, ort_inputs)
-    ort_outputs = runner.run_ort_session(ort_inputs, session)
-    ort_outputs = runner.input_handler.update_ort_outputs(ort_outputs)
+# generated_ids = []
+# for _ in range(1, runner.gen_len):
+#     generated_ids.append(ort_outputs["logits"].argmax(-1).reshape(-1, 1))
+#     ort_inputs = runner.input_handler.update_ort_inputs(ort_inputs, ort_outputs)
+#     ort_inputs = load_weight_free_ort_inputs(weight_spec_path, ort_inputs)
+#     ort_outputs = runner.run_ort_session(ort_inputs, session)
+#     ort_outputs = runner.input_handler.update_ort_outputs(ort_outputs)
 
-generated_ids.append(ort_outputs["logits"].argmax(-1).reshape(-1, 1))
-generated_ids = np.concatenate(generated_ids, axis=1)
-generated_text = runner.input_handler.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
+# generated_ids.append(ort_outputs["logits"].argmax(-1).reshape(-1, 1))
+# generated_ids = np.concatenate(generated_ids, axis=1)
+# generated_text = runner.input_handler.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
 
-print("Running QPC generate ...")
-try:
-    exec_info = qeff_model.generate(
-        prompts=["My name is"],
-        tokenizer=tokenizer,
-        automation=True,
-        generation_len=runner.gen_len,
-    )
-    qpc_generated_ids = np.asarray(exec_info.generated_ids[0]).reshape(1, -1)
-    qpc_generated_text = tokenizer.batch_decode(qpc_generated_ids, skip_special_tokens=True)
+# print("Running QPC generate ...")
+# try:
+#     exec_info = qeff_model.generate(
+#         prompts=["My name is"],
+#         tokenizer=tokenizer,
+#         automation=True,
+#         generation_len=runner.gen_len,
+#     )
+#     qpc_generated_ids = np.asarray(exec_info.generated_ids[0]).reshape(1, -1)
+#     qpc_generated_text = tokenizer.batch_decode(qpc_generated_ids, skip_special_tokens=True)
 
-    print(exec_info)
-    print(generated_ids)
-    print(generated_text)
-    print(qpc_generated_ids)
-    print(qpc_generated_text)
-except RuntimeError as exc:
-    print(f"Skipping QPC generate: {exc}")
+#     print(exec_info)
+#     print(generated_ids)
+#     print(generated_text)
+#     print(qpc_generated_ids)
+#     print(qpc_generated_text)
+# except RuntimeError as exc:
+#     print(f"Skipping QPC generate: {exc}")
 
-print(f"Weight-free ONNX: {onnx_path}")
-print(f"Weight spec: {weight_spec_path}")
-#print(generated_text)
+# print(f"Weight-free ONNX: {onnx_path}")
+# print(f"Weight spec: {weight_spec_path}")
+# #print(generated_text)

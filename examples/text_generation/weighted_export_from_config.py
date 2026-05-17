@@ -94,9 +94,8 @@ def _sync_embedded_extdata(onnx_path: Path, weight_spec_path: Path) -> None:
     onnx.save(onnx_model, str(tmp))
     tmp.replace(onnx_path)
 
-
-#model_name = "meta-llama/Llama-3.3-70B-Instruct"
-model_name = "meta-llama/Llama-3.2-1B"
+model_name = "meta-llama/Llama-3.3-70B-Instruct"
+#model_name = "meta-llama/Llama-3.2-1B"
 # model_name = "gpt2"
 # model_name = "hf-internal-testing/tiny-random-LlamaForCausalLM"
 
@@ -119,9 +118,9 @@ runner = ApiRunner(
     full_batch_size=FULL_BATCH_SIZE if CONTINUOUS_BATCHING else None,
 )
 
-with init_empty_weights():
-   meta_model = AutoModelForCausalLM.from_config(config, attn_implementation="eager")
-#meta_model=AutoModelForCausalLM.from_pretrained(model_name,config=config)
+#with init_empty_weights():
+#   meta_model = AutoModelForCausalLM.from_config(config, attn_implementation="eager")
+meta_model=AutoModelForCausalLM.from_pretrained(model_name,config=config)
 
 qeff_model = QEFFAutoModelForCausalLM(
     meta_model,
@@ -136,18 +135,18 @@ onnx_path = Path(
         export_dir=export_dir,
         use_dynamo=True,
         use_onnx_subfunctions=True,
-        use_weight_free_export=True,
+        use_weight_free_export=False,
         offload_pt_weights=False,
     )
 )
 export_elapsed = time.perf_counter() - export_start
-weight_spec_path = resolve_weight_spec_path(onnx_path)
+#weight_spec_path = resolve_weight_spec_path(onnx_path)
 
 print(f"Weight-free export time: {export_elapsed:.3f} sec")
 
 print("Converting checkpoint to FP32 (one-time local materialization) ...")
 fp32_convert_time_start=time.perf_counter();
-convert_checkpoint_to_fp32(onnx_path, weight_spec_path)
+#convert_checkpoint_to_fp32(onnx_path, weight_spec_path)
 fp32_convert_time=time.perf_counter()-fp32_convert_time_start
 print(f"fp32 convert time: {fp32_convert_time:.3f} sec")
 print("Compiling weight-free ONNX ...")
@@ -157,33 +156,33 @@ qpc_path = qeff_model.compile(
     compile_dir=str(onnx_path.parent / "qpc"),
     prefill_seq_len=8,
     ctx_len=32,
-    num_devices=4,
+    use_dynamo=True,
     mxfp6_matmul=True,
     mxint8_kv_cache=True,
-    use_dynamo=True,
+    num_devices=4,
     use_onnx_subfunctions=True,
-    use_weight_free_export=True,
+    use_weight_free_export=False,
 )
 compile_time = time.perf_counter()-compile_start
 print(f"compile time: {compile_time:.3f} sec")
 print(f"QPC: {qpc_path}")
 
-session = ort.InferenceSession(str(onnx_path))
-ort_inputs = load_weight_free_ort_inputs(weight_spec_path, runner.input_handler.prepare_ort_inputs())
-ort_outputs = runner.run_ort_session(ort_inputs, session)
-ort_outputs = runner.input_handler.update_ort_outputs(ort_outputs)
+# session = ort.InferenceSession(str(onnx_path))
+# ort_inputs = load_weight_free_ort_inputs(weight_spec_path, runner.input_handler.prepare_ort_inputs())
+# ort_outputs = runner.run_ort_session(ort_inputs, session)
+# ort_outputs = runner.input_handler.update_ort_outputs(ort_outputs)
 
-generated_ids = []
-for _ in range(1, runner.gen_len):
-    generated_ids.append(ort_outputs["logits"].argmax(-1).reshape(-1, 1))
-    ort_inputs = runner.input_handler.update_ort_inputs(ort_inputs, ort_outputs)
-    ort_inputs = load_weight_free_ort_inputs(weight_spec_path, ort_inputs)
-    ort_outputs = runner.run_ort_session(ort_inputs, session)
-    ort_outputs = runner.input_handler.update_ort_outputs(ort_outputs)
+# generated_ids = []
+# for _ in range(1, runner.gen_len):
+#     generated_ids.append(ort_outputs["logits"].argmax(-1).reshape(-1, 1))
+#     ort_inputs = runner.input_handler.update_ort_inputs(ort_inputs, ort_outputs)
+#     ort_inputs = load_weight_free_ort_inputs(weight_spec_path, ort_inputs)
+#     ort_outputs = runner.run_ort_session(ort_inputs, session)
+#     ort_outputs = runner.input_handler.update_ort_outputs(ort_outputs)
 
-generated_ids.append(ort_outputs["logits"].argmax(-1).reshape(-1, 1))
-generated_ids = np.concatenate(generated_ids, axis=1)
-generated_text = runner.input_handler.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
+# generated_ids.append(ort_outputs["logits"].argmax(-1).reshape(-1, 1))
+# generated_ids = np.concatenate(generated_ids, axis=1)
+# generated_text = runner.input_handler.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
 
 print("Running QPC generate ...")
 try:

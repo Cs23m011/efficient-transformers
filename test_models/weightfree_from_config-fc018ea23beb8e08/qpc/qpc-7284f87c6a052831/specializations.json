@@ -1,0 +1,20 @@
+{
+    "specializations":[
+        {
+            "name":"Prefill",
+            "symbols":{
+                "batch_size":"1",
+                "ctx_len":"32",
+                "seq_len":"8"
+            }
+        },
+        {
+            "name":"Decode",
+            "symbols":{
+                "batch_size":"1",
+                "ctx_len":"32",
+                "seq_len":"1"
+            }
+        }
+    ]
+}
