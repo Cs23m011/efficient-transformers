@@ -96,7 +96,7 @@ def _sync_embedded_extdata(onnx_path: Path, weight_spec_path: Path) -> None:
 
 
 #model_name = "meta-llama/Llama-3.3-70B-Instruct"
-model_name = "meta-llama/Llama-3.2-1B"
+model_name = "Qwen/Qwen3-8B"
 # model_name = "gpt2"
 # model_name = "hf-internal-testing/tiny-random-LlamaForCausalLM"
 
