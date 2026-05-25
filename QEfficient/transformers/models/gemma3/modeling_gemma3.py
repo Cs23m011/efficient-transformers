@@ -7,6 +7,7 @@
 
 import copy
 from typing import Any, Dict, List, Optional, Tuple, Type, Union
+from typing import List, Optional, Tuple, Type, Union
 
 import torch
 from torch import nn
@@ -63,10 +64,12 @@ class QEffGemma3CustomRMSNormAIC(nn.Module):
     def forward(self, hidden_states):
         rms_interface = select_interface(GemmaRMSNormFunc.apply, torch.ops.qefficient.rms_norm)
         return rms_interface(
+        out = GemmaRMSNormFunc.apply(
             hidden_states,
             (self.weight).to(hidden_states.dtype) + 1.0,
             self.variance_epsilon if hasattr(self, "variance_epsilon") else self.eps,
         )
+        return out.to(hidden_states.dtype)
 
 
 class QEffGemma3RotaryEmbedding(nn.Module):

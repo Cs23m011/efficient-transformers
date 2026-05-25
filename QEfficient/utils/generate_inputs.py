@@ -228,6 +228,8 @@ class InputHandler:
         input_ids = inputs["input_ids"]
         attention_mask = inputs.get("attention_mask")
         batch_size, input_len = input_ids.shape
+        batch_size, input_len = input_ids.shape
+        inputs.pop("attention_mask")
         inputs.pop("token_type_ids", None)
         position_ids = np.arange(input_len).reshape(1, -1)
         inputs["input_ids"] = np.concatenate(
@@ -263,6 +265,15 @@ class InputHandler:
                         (batch_size, self.ctx_len, self.config.index_head_dim), dtype=np.float32
                     )
 
+                if (
+                    all(hasattr(self.config, attr) for attr in ["sliding_window", "layer_types"])
+                    and self.config.layer_types[i] == "sliding_attention"
+                ):
+                    pad_shape = self.padding_shape[:2] + [self.config.sliding_window] + [self.padding_shape[-1]]
+                else:
+                    pad_shape = self.padding_shape
+                inputs["past_key." + str(i)] = np.zeros((pad_shape), dtype=np.float32)
+                inputs["past_value." + str(i)] = np.zeros((pad_shape), dtype=np.float32)
         if self.full_batch_size:
             inputs["batch_index"] = np.arange(self.full_batch_size).reshape(-1, 1)
         return inputs
@@ -317,6 +328,9 @@ class InputHandler:
         outputs["past_key_values"] = present_key_values
         if indexer_key_cache:
             outputs["indexer_key_cache"] = indexer_key_cache
+
+        outputs = {}
+        outputs["past_key_values"] = present_key_values
         outputs["logits"] = ort_outputs["logits"]
 
         return outputs

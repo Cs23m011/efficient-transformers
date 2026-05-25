@@ -445,6 +445,20 @@ class QEFFBaseModel(ABC):
                 f"Unknown shape of past_key_values! Expected length of past_key_values for each layer to be either 2 or 4 but got {state_len}"
             )
 
+        def _resolve_pkv_layers(pkv_obj):
+            if isinstance(pkv_obj, (list, tuple)):
+                return pkv_obj
+            if hasattr(pkv_obj, "to_legacy_cache"):
+                return pkv_obj.to_legacy_cache()
+            if hasattr(pkv_obj, "layers"):
+                layers = []
+                for layer in pkv_obj.layers:
+                    keys = getattr(layer, "keys", None)
+                    values = getattr(layer, "values", None)
+                    layers.append((keys, values))
+                return tuple(layers)
+            return None
+
         # Create input_names from example_inputs
         input_names = []
         for param in inspect.signature(self.model.forward).parameters:
@@ -601,6 +615,17 @@ class QEFFBaseModel(ABC):
                     dynamo=False,
                     **export_kwargs,
                 )
+            torch.onnx.export(
+                self.model,
+                (),
+                str(onnx_path),
+                kwargs=example_inputs,
+                input_names=input_names,
+                output_names=output_names,
+                dynamic_axes=dynamic_axes,
+                opset_version=constants.ONNX_EXPORT_OPSET,
+                **export_kwargs,
+            )
             logger.info("PyTorch export successful")
             _ = self._offload_model_weights(offload_pt_weights)
             load_onnx_path = tmp_onnx_path if use_weight_free_export else onnx_path

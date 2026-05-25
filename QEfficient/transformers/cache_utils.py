@@ -37,6 +37,16 @@ class HybridChunkedCache:  # type: ignore[no-redef]
     pass
 
 
+# HybridCache and HybridChunkedCache were removed from transformers in 5.3+.
+# Define lightweight local stubs so downstream QEff wrappers can still inherit from them.
+class HybridCache:  # type: ignore[no-redef]
+    pass
+
+
+class HybridChunkedCache:  # type: ignore[no-redef]
+    pass
+
+
 class InvalidIndexProvider:
     SUBFUNC_ENABLED = False
 
@@ -214,6 +224,7 @@ class QEffDynamicLayer(CacheLayerMixin):
 
         invalid_mask = _match_invalid_mask(invalid_mask, v_out.shape[-2])
         v_out = torch.where(invalid_mask.unsqueeze(-1), torch.zeros_like(v_out), v_out)
+        v_out = torch.where(invalid_mask.unsqueeze(-1), torch.tensor(0.0, dtype=torch.float32), v_out)
         return k_out, v_out
 
     def read_only_blockedKV(self, start_index, end_index, cache_kwargs):
@@ -261,6 +272,7 @@ class QEffDynamicLayer(CacheLayerMixin):
 
         invalid_mask = _match_invalid_mask(invalid_mask, v_out.shape[-2])
         v_out = torch.where(invalid_mask.unsqueeze(-1), torch.zeros_like(v_out), v_out)
+        v_out = torch.where(invalid_mask.unsqueeze(-1), torch.tensor(0.0, dtype=torch.float32), v_out)
         return k_out, v_out
 
     def write_only(self, key_states, value_states, cache_kwargs):
@@ -383,6 +395,10 @@ class QEffDynamicLayer(CacheLayerMixin):
 
             invalid_mask = _match_invalid_mask(invalid_mask, v_out.shape[-2])
             v_out = torch.where(invalid_mask.unsqueeze(-1), torch.zeros_like(v_out), v_out)
+                k_out = CtxGatherFunc.apply(k_out, ctx_indices, ctx_len)
+                v_out = CtxGatherFunc.apply(v_out, ctx_indices, ctx_len)
+            invalid_mask = _match_invalid_mask(invalid_mask, v_out.shape[-2])
+            v_out = torch.where(invalid_mask.unsqueeze(-1), torch.tensor(0.0, dtype=torch.float32), v_out)
 
         return k_out, v_out
 
@@ -467,6 +483,8 @@ class QEffDynamicLayer(CacheLayerMixin):
 
             invalid_mask = _match_invalid_mask(invalid_mask, v_out.shape[-2])
             v_out = torch.where(invalid_mask.unsqueeze(-1), torch.zeros_like(v_out), v_out)
+            invalid_mask = _match_invalid_mask(invalid_mask, v_out.shape[-2])
+            v_out = torch.where(invalid_mask.unsqueeze(-1), torch.tensor(0.0, dtype=torch.float32), v_out)
 
         return k_out, v_out
 

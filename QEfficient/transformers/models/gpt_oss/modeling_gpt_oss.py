@@ -54,6 +54,13 @@ class QEffGptOssExperts(GptOssExperts):
         self.up_proj = nn.Parameter(torch.empty(self.num_experts, self.hidden_size, self.expert_dim))
         self.gate_proj_bias = nn.Parameter(torch.empty(self.num_experts, self.expert_dim))
         self.up_proj_bias = nn.Parameter(torch.empty(self.num_experts, self.expert_dim))
+        # transformers>=5 uses fused gate_up projections. Keep backward-compatible
+        # aliases expected by existing QEff paths.
+        self.expert_dim = getattr(self, "intermediate_size", self.gate_up_proj.shape[-1] // 2)
+        self.gate_proj = nn.Parameter(self.gate_up_proj[:, :, : self.expert_dim].detach().clone())
+        self.up_proj = nn.Parameter(self.gate_up_proj[:, :, self.expert_dim :].detach().clone())
+        self.gate_proj_bias = nn.Parameter(self.gate_up_proj_bias[:, : self.expert_dim].detach().clone())
+        self.up_proj_bias = nn.Parameter(self.gate_up_proj_bias[:, self.expert_dim :].detach().clone())
 
 
 

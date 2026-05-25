@@ -235,6 +235,7 @@ class ApiRunner:
                 if tensor.data_type == onnx.TensorProto.UNDEFINED:
                     continue
                 np_tensor = onnx.numpy_helper.to_array(tensor, os.path.dirname(model_path))
+                np_tensor = onnx.numpy_helper.to_array(node.attribute[0].t, os.path.dirname(model_path))
                 if len(np_tensor.shape) == 0 and np_tensor.item() == 2147483647:
                     added_initializers[node.output[0]] = onnxruntime.OrtValue.ortvalue_from_numpy(
                         np.array(0, np_tensor.dtype)
