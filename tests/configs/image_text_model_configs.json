@@ -155,6 +155,19 @@
           "patch_size": 14,
           "vocab_size": 32000
         }
+        "vocab_size": 131072
+       },
+
+     "vision_config": {
+        "head_dim": 32,
+        "hidden_size": 128,
+        "image_size": 1540,
+        "intermediate_size": 256,
+        "model_type": "pixtral",
+        "num_attention_heads": 4,
+        "num_hidden_layers": 1,
+        "patch_size": 14,
+        "vocab_size": 32000
       }
     },
     {

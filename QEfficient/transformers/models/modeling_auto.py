@@ -126,6 +126,8 @@ def _resolve_torch_dtype(kwargs: dict) -> None:
     # single code path governs the HW dtype policy below.
     if kwargs.get("torch_dtype", None) is None and kwargs.get("dtype", None) is not None:
         kwargs["torch_dtype"] = kwargs["dtype"]
+    """
+    aic_hw_version = constants.DEFAULT_AIC_HW_VERSION
     current_dtype = kwargs.get("torch_dtype", None)
 
     if (current_dtype is None or current_dtype == torch.bfloat16) and aic_hw_version != "ai200":
@@ -3379,6 +3381,10 @@ class QEFFAutoModelForImageTextToText:
             model = _build_meta_model(cls._hf_auto_class, pretrained_model_name_or_path, kwargs)
         else:
             model = cls._hf_auto_class.from_pretrained(pretrained_model_name_or_path, **kwargs)
+        kwargs.update({"attn_implementation": "eager", "low_cpu_mem_usage": False})
+
+        _resolve_torch_dtype(kwargs)
+        model = cls._hf_auto_class.from_pretrained(pretrained_model_name_or_path, **kwargs)
 
         kwargs.update({"enable_proxy": enable_proxy} if enable_proxy else {})
 
@@ -3667,6 +3673,10 @@ class QEFFAutoModelForCausalLM(QEFFBaseModel):
             model = _build_meta_model(cls._hf_auto_class, pretrained_model_name_or_path, kwargs)
         else:
             model = cls._hf_auto_class.from_pretrained(pretrained_model_name_or_path, *args, **kwargs)
+        kwargs.update({"attn_implementation": "eager", "low_cpu_mem_usage": False})
+
+        _resolve_torch_dtype(kwargs)
+        model = cls._hf_auto_class.from_pretrained(pretrained_model_name_or_path, *args, **kwargs)
         if qaic_config is not None:
             qaic_config["pretrained_model_name_or_path"] = pretrained_model_name_or_path
 
@@ -4124,6 +4134,15 @@ class QEFFAutoModelForCausalLM(QEFFBaseModel):
                 offload_pt_weights=kwargs.get("offload_pt_weights", True),
                 prefill_only=prefill_only,
             )
+        return self._export(
+            example_inputs,
+            output_names=output_names,
+            dynamic_axes=dynamic_axes,
+            export_dir=export_dir,
+            use_onnx_subfunctions=kwargs.get("use_onnx_subfunctions", False),
+            offload_pt_weights=kwargs.get("offload_pt_weights", True),
+            prefill_only=prefill_only,
+        )
 
     def build_prefill_specialization(
         self,

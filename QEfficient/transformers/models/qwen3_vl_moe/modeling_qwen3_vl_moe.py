@@ -678,6 +678,9 @@ class QEffPrefillChunkedQwen3VLMoeTextSparseMoeBlock(Qwen3VLMoeTextSparseMoeBloc
         act = getattr(self.experts, "act_fn", F.silu)
 
         router_logits, top_w, top_i = self.gate(x)
+        gate_out = self.gate(x)
+        router_logits, top_w, top_i = gate_out
+        top_w = top_w / torch.einsum("bi->b", top_w)[:, None]
         top_w = top_w.to(hidden_states.dtype)
         num_experts = getattr(self, "num_experts", self.gate.num_experts)
         routing_weights = torch.zeros((T, num_experts), dtype=x.dtype)
@@ -693,6 +696,20 @@ class QEffPrefillChunkedQwen3VLMoeTextSparseMoeBlock(Qwen3VLMoeTextSparseMoeBloc
             gate = x @ W_g
             up = x @ W_u
             down = (up * act(gate)) @ W_d
+
+            W_gate_up_e = self.experts.gate_up_proj[e]  # [H, 2I]
+            W_dn_e = self.experts.down_proj[e]  # [I, H]
+            if W_gate_up_e.shape[0] != H:
+                W_gate_up_e = W_gate_up_e.transpose(0, 1)
+            gate_up = x @ W_gate_up_e  # [T, 2I]
+
+            I2 = gate_up.shape[-1] // 2
+            gate = gate_up[:, :I2]  # [T, I]
+            up = gate_up[:, I2:]  # [T, I]
+            intermediate = up * act(gate)
+            if W_dn_e.shape[0] != I2:
+                W_dn_e = W_dn_e.transpose(0, 1)
+            down = intermediate @ W_dn_e
             masked_down = torch.where(
                 routing_weight > 0, down * routing_weight, torch.zeros_like(expert_out, dtype=down.dtype)
             )  # TODO: verify and remove
@@ -965,12 +982,24 @@ class QEffQwen3VLMoeTextSparseMoeBlock(Qwen3VLMoeTextSparseMoeBlock):
         up_proj = self.experts.up_proj[idx.flatten()]
         w_dn = self.experts.down_proj_t[idx.flatten()]
 
+        gate_out = self.gate(x)
+        router_logits, top_w, top_i = gate_out
+        top_w = top_w / torch.einsum("bi->b", top_w)[:, None]
+        top_w = top_w.to(x.dtype)
+        idx = top_i.reshape(-1)
+        w_up = self.experts.gate_up_proj.index_select(0, idx)
+        w_dn = self.experts.down_proj.index_select(0, idx)
+        if w_up.shape[1] != H:
+            w_up = w_up.transpose(1, 2)
+
         top_k = top_i.shape[-1]
         xk = x.unsqueeze(1).expand(-1, top_k, -1).contiguous()
         xk = xk.view(-1, 1, H)
         gate = torch.bmm(xk, gate_proj)
         up = torch.bmm(xk, up_proj)
         intermediate = up * self.experts.act_fn(gate)
+        if w_dn.shape[1] != half:
+            w_dn = w_dn.transpose(1, 2)
         experts_out = torch.bmm(intermediate, w_dn)
         experts_out = experts_out.view(T, top_k, H) * top_w.unsqueeze(-1)
         experts_out = torch.einsum("bnd->bd", experts_out)

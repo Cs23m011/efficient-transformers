@@ -406,6 +406,21 @@ class QEFFBaseModel(ABC):
                         continue
                     for i in range(len(pkv_layers)):
                         input_names.extend(_resolve_pkv_names(i, pkv_layers[i]))
+                        if len(pkv_layers[0]) == 2:
+                            input_names.extend([f"past_key.{i}", f"past_value.{i}"])
+                        elif len(pkv_layers[0]) == 4:
+                            input_names.extend(
+                                [
+                                    f"past_key_self.{i}",
+                                    f"past_value_self.{i}",
+                                    f"past_key_cross.{i}",
+                                    f"past_value_cross.{i}",
+                                ]
+                            )
+                        else:
+                            raise ValueError(
+                                f"Unknown shape of past_key_values! Expected length of past_key_values for each layer to be either 2 or 4 but got {len(pkv_layers[0])}"
+                            )
                 elif param == "compressed_kvs":
                     for i in range(len(example_inputs["compressed_kvs"])):
                         input_names.extend(
@@ -444,6 +459,17 @@ class QEFFBaseModel(ABC):
                     opset_version=constants.ONNX_EXPORT_OPSET,
                     **export_kwargs,
                 )
+            torch.onnx.export(
+                self.model,
+                (),
+                str(onnx_path),
+                kwargs=example_inputs,
+                input_names=input_names,
+                output_names=output_names,
+                dynamic_axes=dynamic_axes,
+                opset_version=constants.ONNX_EXPORT_OPSET,
+                **export_kwargs,
+            )
             logger.info("PyTorch export successful")
             _ = self._offload_model_weights(offload_pt_weights)
             model = onnx.load(onnx_path, load_external_data=False)

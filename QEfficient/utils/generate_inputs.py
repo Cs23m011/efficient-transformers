@@ -9,6 +9,7 @@ from typing import List
 import numpy as np
 import torch
 
+from QEfficient.transformers.modeling_utils import DYNAMIC_SEQ_LEN_SUPPORTED_MODEL_ARCH
 from QEfficient.utils import (
     get_num_layers_from_config,
     get_padding_shape_from_config,
@@ -133,6 +134,13 @@ class InputHandler:
         past_key_values = []
         for i in range(self.n_layer):
             pad_shape = self._get_layer_cache_shape(i)
+            if (
+                all(hasattr(self.config, attr) for attr in ["sliding_window", "layer_types"])
+                and self.config.layer_types[i] == "sliding_attention"
+            ):
+                pad_shape = self.padding_shape[:2] + [self.config.sliding_window] + [self.padding_shape[-1]]
+            else:
+                pad_shape = self.padding_shape
             past_key = torch.zeros((pad_shape), dtype=self.dtype)
             past_value = torch.zeros((pad_shape), dtype=self.dtype)
             pkv = (past_key, past_value)
@@ -211,6 +219,22 @@ class InputHandler:
             pad_shape = self._get_layer_cache_shape(i)
             inputs["past_key." + str(i)] = np.zeros((pad_shape), dtype=np.float32)
             inputs["past_value." + str(i)] = np.zeros((pad_shape), dtype=np.float32)
+        if hasattr(self.config, "model_type") and self.config.model_type in DYNAMIC_SEQ_LEN_SUPPORTED_MODEL_ARCH:
+            for i in range(self.n_layer):
+                cache_shape = self.global_shape if not self.is_chunked_attention[i] else self.sliding_shape
+                inputs["past_key." + str(i)] = np.zeros((cache_shape), dtype=np.float32)
+                inputs["past_value." + str(i)] = np.zeros((cache_shape), dtype=np.float32)
+        else:
+            for i in range(self.n_layer):
+                if (
+                    all(hasattr(self.config, attr) for attr in ["sliding_window", "layer_types"])
+                    and self.config.layer_types[i] == "sliding_attention"
+                ):
+                    pad_shape = self.padding_shape[:2] + [self.config.sliding_window] + [self.padding_shape[-1]]
+                else:
+                    pad_shape = self.padding_shape
+                inputs["past_key." + str(i)] = np.zeros((pad_shape), dtype=np.float32)
+                inputs["past_value." + str(i)] = np.zeros((pad_shape), dtype=np.float32)
         if self.full_batch_size:
             inputs["batch_index"] = np.arange(self.full_batch_size).reshape(-1, 1)
         return inputs
@@ -359,6 +383,7 @@ class InputHandlerVLM:
             k: v
             for k, v in inputs.items()
             if k in {"pixel_values", "image_position_ids", "aspect_ratio_ids", "aspect_ratio_mask"}
+            k: v for k, v in inputs.items() if k in {"pixel_values", "aspect_ratio_ids", "aspect_ratio_mask"}
         }
 
         for i in range(num_hidden_layers):
@@ -440,6 +465,7 @@ class InputHandlerVLM:
             updated_inputs["mm_token_type_ids"] = np.zeros_like(
                 updated_inputs["input_ids"], dtype=inputs["mm_token_type_ids"].dtype
             )
+
         if "cross_attention_mask" in inputs.keys():
             bs, _, num_images, img_tiles = inputs["cross_attention_mask"].shape
             updated_inputs["cross_attention_mask"] = torch.ones(

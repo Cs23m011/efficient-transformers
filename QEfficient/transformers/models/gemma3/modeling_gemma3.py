@@ -599,6 +599,7 @@ class QEffGemma3ForCausalLMModel(Gemma3ForCausalLM):
 
     def get_dummy_pkv_cache(self, config, batch_size, seq_len, dtype=None):
         dtype = dtype or getattr(config, "torch_dtype", torch.float32)
+    def get_dummy_pkv_cache(self, config, batch_size, seq_len, dtype=torch.float32):
         n_heads = config.num_key_value_heads
         d_head = config.head_dim
         layer_switch = (
@@ -957,6 +958,7 @@ class QEffGemma3ForConditionalGeneration(Gemma3ForConditionalGeneration):
 
     def get_dummy_pkv_cache(self, config, batch_size, seq_len, dtype=None):
         dtype = dtype or getattr(config, "torch_dtype", torch.float32)
+    def get_dummy_pkv_cache(self, config, batch_size, seq_len, dtype=torch.float32):
         n_heads = config.num_key_value_heads
         d_head = config.head_dim
         layer_switch = (
@@ -1039,10 +1041,15 @@ class QEffGemma3ForConditionalGeneration(Gemma3ForConditionalGeneration):
         fbs: int = constants.ONNX_EXPORT_EXAMPLE_FBS
 
         # Add data for KV
+        pkv_dtype = (
+            next(self.language_model.parameters()).dtype if hasattr(self, "language_model") else self.config.torch_dtype
+        )
         lang_inputs["past_key_values"] = self.get_dummy_pkv_cache(
             config=self.language_model.config,
             batch_size=fbs if continuous_batching else bs,
             seq_len=prefill_seq_len,
+            seq_len=constants.ONNX_EXPORT_EXAMPLE_SEQ_LEN,
+            dtype=pkv_dtype,
         )
 
         if comp_ctx_lengths is not None:

@@ -779,7 +779,6 @@ class KVCacheTransform(ModuleMappingTransform):
         Gemma3Attention: QEffGemma3Attention,
         Gemma3DecoderLayer: QEffGemma3DecoderLayer,
         Gemma3TextModel: QEffGemma3TextModel,
-        Gemma3ForCausalLM: QEffGemma3ForCausalLMModel,
         Gemma3ForConditionalGeneration: QEffGemma3ForConditionalGeneration,
         # Gemma4
         Gemma4TextAttention: QEffGemma4TextAttention,
@@ -791,6 +790,7 @@ class KVCacheTransform(ModuleMappingTransform):
         Gemma4TextRouter: QEffGemma4TextRouter,
         Gemma4VisionAttention: QEffGemma4VisionAttention,
         Gemma4ClippableLinear: QEffGemma4ClippableLinear,
+        Gemma3ForCausalLM: QEffGemma3ForCausalLMModel,
         # GPT_OSS
         GptOssAttention: QEffGptOssAttention,
         GptOssDecoderLayer: QEffGptOssDecoderLayer,
