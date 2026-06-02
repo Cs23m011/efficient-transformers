@@ -104,6 +104,7 @@ class CtxScatterFunc3DGeneralized(torch.autograd.Function):
     masks out invalid rows before scattering so ``data`` is left untouched where
     ``position_ids == INT32_MAX``.
     """
+    """3D scatter variant that leaves INT32_MAX positions untouched."""
 
     @staticmethod
     def forward(data: torch.Tensor, position_ids: torch.Tensor, updates: torch.Tensor):
@@ -146,6 +147,7 @@ def CtxScatter3DInt(
 
 class CtxScatterFunc3DInt(torch.autograd.Function):
     """Int32-typed scatter used to build a packed->original index table."""
+    """Int32 3D scatter used to build packed-to-original index tables."""
 
     @staticmethod
     def forward(data: torch.Tensor, position_ids: torch.Tensor, updates: torch.Tensor):
@@ -198,11 +200,17 @@ class CtxGatherFunc3DGeneralized(torch.autograd.Function):
     pipeline can be easily recognized and so the ONNX symbolic omits
     ``setTypeAs`` (needed when the caller already has a matching dtype on
     ``data`` and wants the op signature to flow through without dtype pinning).
+    """3D gather variant that leaves ONNX output shape inference to the custom op.
+
+    Eager execution intentionally matches ``CtxGatherFunc3D``. During ONNX export,
+    this variant does not call ``setTypeAs(data)`` because GLM MoE packed prefill
+    gathers return an index-shaped output rather than a data-shaped output.
     """
 
     @staticmethod
     def forward(data: torch.Tensor, ctx_indices: torch.Tensor):
         batch_indices = torch.arange(data.shape[0]).view(-1, 1)
+        batch_indices = torch.arange(data.shape[0], device=data.device).view(-1, 1)
         ctx_indices = torch.where(ctx_indices == torch.iinfo(torch.int32).max, 0, ctx_indices)
         return data[batch_indices, ctx_indices]
 

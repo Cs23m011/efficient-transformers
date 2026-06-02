@@ -928,6 +928,24 @@ class QEFFBaseModel(ABC):
             return onnx_path
         onnx_path = Path(onnx_path)
 
+        moe_prefill_packed_chunk_size = compiler_options.pop("moe_prefill_packed_chunk_size", None)
+        existing_onnx_path = onnx_path or self.onnx_path
+        onnx_path = Path(
+            existing_onnx_path
+            if existing_onnx_path
+            else self.get_onnx_path(
+                prefill_only,
+                enable_chunking,
+                specializations,
+                offload_pt_weights,
+                use_onnx_subfunctions,
+                retain_full_kv,
+                num_devices=mdp_ts_num_devices,
+                qaic_config=qaic_config,
+                moe_prefill_packed_chunk_size=moe_prefill_packed_chunk_size,
+                **compiler_options,
+            )
+        )
         compile_dir = Path(compile_dir or onnx_path.parent)
         qpc_path = compile_dir / "qpc"
         if not onnx_path.is_file():

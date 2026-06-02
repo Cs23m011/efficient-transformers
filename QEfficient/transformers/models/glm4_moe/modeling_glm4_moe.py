@@ -595,6 +595,8 @@ class QEffGlm4MoeTopkRouter(nn.Module):
     def forward(self, hidden_states):
         # orig_i, orig_w = self.orig_forward(hidden_states)
         hidden_states = hidden_states.view(-1, self.config.hidden_size)
+        # import ipdb; ipdb.set_trace()c
+
         # router_logits = torch.nn.functional.linear(hidden_states.type(torch.float32), self.weight.type(torch.float32))
         router_logits = torch.nn.functional.linear(hidden_states, self.weight)
 
@@ -760,6 +762,7 @@ class QEffPrefillChunkedGlm4MoeMoE(QEffGlm4MoeMoE):
             )
 
         return torch.einsum("nth->th", expert_out)
+        return expert_out.sum(dim=0)
 
     def forward(self, hidden_states):
         residuals = hidden_states

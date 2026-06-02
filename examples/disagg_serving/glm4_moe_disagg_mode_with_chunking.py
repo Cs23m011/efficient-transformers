@@ -51,6 +51,7 @@ prefill_qpc_path = qeff_model.compile(
     mxint8_kv_cache=True,
     num_devices=1,
     # split_retained_state_io=True,
+    split_retained_state_io=True,
     mos=1,
     aic_enable_depth_first=False,
     user_tiled=True,
