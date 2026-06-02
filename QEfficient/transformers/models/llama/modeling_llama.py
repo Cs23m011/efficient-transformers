@@ -61,7 +61,7 @@ class QEffLlamaRotaryEmbedding(LlamaRotaryEmbedding):
         self.register_buffer("sin_cached", emb.sin().to(dtype), persistent=False)
 
 
-def qeff_apply_rotary_pos_emb(q, k, cos, sin):
+def qeff_apply_rotary_pos_emb(q, k, cos, sin, position_ids=None, unsqueeze_dim=1):
     """Applies Rotary Position Embedding to the query and key tensors.
 
     Args:
@@ -69,9 +69,17 @@ def qeff_apply_rotary_pos_emb(q, k, cos, sin):
         k (`torch.Tensor`): The key tensor.
         cos (`torch.Tensor`): The cosine part of the rotary embedding.
         sin (`torch.Tensor`): The sine part of the rotary embedding.
+        position_ids (`torch.Tensor`, *optional*): token position indices for KV-cache gather.
+        unsqueeze_dim (`int`, *optional*, defaults to 1): broadcast axis.
     Returns:
         `tuple(torch.Tensor)` comprising of the query and key tensors rotated using the Rotary Position Embedding.
     """
+    if position_ids is not None:
+        cos = cos[position_ids].unsqueeze(unsqueeze_dim)
+        sin = sin[position_ids].unsqueeze(unsqueeze_dim)
+    cos = cos.to(device=q.device)
+    sin = sin.to(device=q.device)
+
     # Apply rotation
     q_embed = (q * cos) + (rotate_half(q) * sin)
     k_embed = (k * cos) + (rotate_half(k) * sin)
@@ -93,9 +101,8 @@ def eager_attention_forward(
 
     attn_weights = torch.matmul(query, key_states.transpose(2, 3)) * scaling
     if attention_mask is not None:
-        attn_weights = torch.where(
-            attention_mask, torch.tensor(MIN_MASKED_ATTENTION_VALUE, dtype=module.config.torch_dtype), attn_weights
-        )
+        masked_fill = torch.full_like(attn_weights, MIN_MASKED_ATTENTION_VALUE, dtype=torch.float32)
+        attn_weights = torch.where(attention_mask, masked_fill, attn_weights)
 
     attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(query.dtype)
     attn_output = torch.matmul(attn_weights, value_states)
@@ -188,6 +195,7 @@ class QEffLlamaDecoderLayer(LlamaDecoderLayer):
     - add new args batch idx for the CB models
     """
 
+    @torch.compiler.nested_compile_region
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -203,10 +211,7 @@ class QEffLlamaDecoderLayer(LlamaDecoderLayer):
         **kwargs,
     ) -> Tuple[torch.FloatTensor, Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]]:
         residual = hidden_states
-
         hidden_states = self.input_layernorm(hidden_states)
-
-        # Self Attention
         hidden_states, _ = self.self_attn(
             hidden_states=hidden_states,
             attention_mask=attention_mask,
@@ -222,7 +227,6 @@ class QEffLlamaDecoderLayer(LlamaDecoderLayer):
         )
         hidden_states = residual + hidden_states
 
-        # Fully Connected
         residual = hidden_states
         hidden_states = self.post_attention_layernorm(hidden_states)
         hidden_states = self.mlp(hidden_states)
@@ -238,8 +242,12 @@ class QEffLlamaModel(LlamaModel):
 
     def __qeff_init__(self):
         self.rotary_emb = QEffLlamaRotaryEmbedding(config=self.config)
-        self.sin_cached = torch.nn.Parameter(self.rotary_emb.sin_cached * self.rotary_emb.attention_scaling)
-        self.cos_cached = torch.nn.Parameter(self.rotary_emb.cos_cached * self.rotary_emb.attention_scaling)
+        self.register_buffer(
+            "sin_cached", self.rotary_emb.sin_cached * self.rotary_emb.attention_scaling, persistent=False
+        )
+        self.register_buffer(
+            "cos_cached", self.rotary_emb.cos_cached * self.rotary_emb.attention_scaling, persistent=False
+        )
 
     def forward(
         self,

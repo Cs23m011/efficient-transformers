@@ -68,6 +68,20 @@ This example:
 - Improves throughput for multi-request scenarios
 - Uses pipe-separated prompts
 
+### weight_free_export_from_config.py
+True weight-free export demo for causal LM ONNX export.
+
+**Usage:**
+```bash
+env PYENV_VERSION=weightfree python weight_free_export_from_config.py
+```
+
+This example:
+- Builds the export object from `AutoConfig` plus `init_empty_weights()`
+- Does not call `QEFFAutoModelForCausalLM.from_pretrained(...)`
+- Exports with `use_dynamo=True`, `use_onnx_subfunctions=True`, and `use_weight_free_export=True`
+- Binds weights into ORT from `weight_spec.json` plus the original safetensors checkpoint
+
 ### gguf_models.py
 GGUF format model support (quantized models). To run GGUF format models, you need to install the `gguf` package:
 

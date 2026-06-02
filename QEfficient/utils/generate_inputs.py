@@ -202,14 +202,19 @@ class InputHandler:
             padding=True,
         )
         input_ids = inputs["input_ids"]
+        attention_mask = inputs.get("attention_mask")
         batch_size, input_len = input_ids.shape
-        inputs.pop("attention_mask")
         inputs.pop("token_type_ids", None)
         position_ids = np.arange(input_len).reshape(1, -1)
         inputs["input_ids"] = np.concatenate(
             [input_ids, np.full((batch_size, self.prompt_len - input_len), self.tokenizer.pad_token_id)],
             axis=1,
         ).astype(np.int64)
+        if attention_mask is not None:
+            inputs["attention_mask"] = np.concatenate(
+                [attention_mask, np.zeros((batch_size, self.prompt_len - input_len), dtype=attention_mask.dtype)],
+                axis=1,
+            )
         inputs["position_ids"] = np.concatenate(
             [position_ids, np.full((batch_size, self.prompt_len - input_len), -1)],
             axis=1,

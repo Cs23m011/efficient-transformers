@@ -8,18 +8,30 @@
 import hashlib
 import json
 from dataclasses import asdict, is_dataclass
+from enum import Enum
+from pathlib import Path
 from typing import Dict
 
 from QEfficient.utils.constants import HASH_HEXDIGEST_STR_LEN
 
 
 def json_serializable(obj):
+    if isinstance(obj, Path):
+        return str(obj)
+    if isinstance(obj, Enum):
+        return obj.value
     if isinstance(obj, set):
         # Convert set to a sorted list of strings for consistent hashing
         return sorted([cls.__name__ if isinstance(cls, type) else str(cls) for cls in obj])
     if is_dataclass(obj):
         # Convert dataclass to dict for serialization
         return asdict(obj)
+    if obj.__class__.__name__ == "Dim":
+        return str(obj)
+    if obj.__class__.__name__ == "_DimHint":
+        return str(obj)
+    if hasattr(obj, "name") and hasattr(obj, "min") and hasattr(obj, "max"):
+        return {"name": obj.name, "min": obj.min, "max": obj.max}
     raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
 
 
@@ -60,6 +72,7 @@ def create_export_hash(**kwargs):
     export_params = {}
     export_params["output_names"] = kwargs.get("output_names")
     export_params["dynamic_axes"] = kwargs.get("dynamic_axes")
+    export_params["dynamic_shapes"] = kwargs.get("dynamic_shapes")
     export_hash_params["export_params"] = export_params
 
     blocking_kwargs = export_hash_params.pop("blocking_kwargs", None)

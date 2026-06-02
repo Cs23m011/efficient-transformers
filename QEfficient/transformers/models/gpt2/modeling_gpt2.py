@@ -28,13 +28,20 @@ def eager_attention_forward(module, query, key, value, attention_mask, head_mask
             [], value.size(-1) ** 0.5, dtype=attn_weights.dtype, device=attn_weights.device
         )
 
+    if not module.is_cross_attention:
+        # if only "normal" attention layer implements causal mask
+        query_length, key_length = query.size(-2), key.size(-2)
+        causal_mask = module.bias[:, :, key_length - query_length : key_length, :key_length]
+        # Need to be a tensor, otherwise we get error: `RuntimeError: expected scalar type float but found double`.
+        # Need to be on the same device, otherwise `RuntimeError: ..., x and y to be on the same device`
+        mask_value = torch.full_like(attn_weights, MIN_MASKED_ATTENTION_VALUE)
+        attn_weights = torch.where(causal_mask, attn_weights.to(attn_weights.dtype), mask_value)
+
     if attention_mask is not None:
-        if attention_mask.dtype == torch.bool:
-            attn_weights = torch.where(
-                attention_mask, torch.tensor(MIN_MASKED_ATTENTION_VALUE, dtype=module.config.torch_dtype), attn_weights
-            )
-        else:
-            attn_weights = attn_weights + attention_mask
+        # Apply the attention mask
+        attn_weights = torch.where(
+            attention_mask, torch.full_like(attn_weights, MIN_MASKED_ATTENTION_VALUE), attn_weights
+        )
 
     attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32)
 
@@ -150,6 +157,7 @@ class QEffGPT2Block(GPT2Block):
     - add new args cache idx for the kv retention
     """
 
+    @torch.compiler.nested_compile_region
     def forward(
         self,
         hidden_states: Optional[Tuple[torch.FloatTensor]],

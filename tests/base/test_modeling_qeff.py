@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import onnx
 import pytest
 
-from QEfficient.base.modeling_qeff import QEFFBaseModel
+from QEfficient.base.modeling_qeff import QEFFBaseModel, _upsert_metadata_prop
 
 
 def test_compiler_invalid_file(tmp_path):
@@ -41,4 +41,29 @@ def test_compiler_invalid_flag(tmp_path):
     onnx.save(onnx_model, valid_file)
 
     with pytest.raises(RuntimeError):
-        QEFFBaseModel._compile(qeff_obj, valid_file, tmp_path, convert_tofp16=True, aic_binary_dir=tmp_path)
+        QEFFBaseModel._compile(
+            qeff_obj, valid_file, tmp_path, convert_tofp16=True, compile_only=True, aic_binary_dir=tmp_path
+        )
+
+
+def test_upsert_metadata_prop_adds_and_updates_entry():
+    model = onnx.parser.parse_model("""
+    <
+        ir_version: 8,
+        opset_import: ["": 17]
+    >
+    test_metadata(float x) => (float y)
+    {
+        y = Identity(x)
+    }
+    """)
+
+    _upsert_metadata_prop(model, "com.qti.aisw.extdata", '{"version":1}')
+    assert len(model.metadata_props) == 1
+    assert model.metadata_props[0].key == "com.qti.aisw.extdata"
+    assert model.metadata_props[0].value == '{"version":1}'
+
+    _upsert_metadata_prop(model, "com.qti.aisw.extdata", '{"version":2}')
+    assert len(model.metadata_props) == 1
+    assert model.metadata_props[0].key == "com.qti.aisw.extdata"
+    assert model.metadata_props[0].value == '{"version":2}'

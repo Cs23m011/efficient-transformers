@@ -5,55 +5,42 @@
 #
 # -----------------------------------------------------------------------------
 
-"""Monkey patches for torch.onnx.utils to fix ONNX export issues."""
+"""Runtime monkey patches for ONNX export compatibility.
+
+Patches kept here:
+  - TorchScript ONNX exporter (_setup_trace_module_map, _get_module_attributes,
+    _jit_pass_onnx_track_scope_attributes): fix attribute-type mismatches in the
+    legacy trace-based exporter (use_dynamo=False path).
+
+Patches removed (upstreamed to PyTorch):
+  - FunctionalTensorMode.__torch_dispatch__ tracker-entry KeyError
+  - _verify_exported_program_signature repeated_subgraph buffer handling
+  - ExportedProgram.named_buffers constants fallback
+  - invoke_subgraph_placeholder kwargs forwarding
+  - materialize_as_graph FunctionalTensor mode handling
+  - InvokeSubgraphHOP.gen_schema GraphModule reuse
+  - _translate_fx_graph / _convert_fx_arg_to_onnx_arg nested tensor constants
+"""
+
+import inspect
+from contextlib import contextmanager
 
 from contextlib import contextmanager
 
 import torch
 import torch.onnx.utils as onnx_utils
 from torch import _C
+from torch.onnx._internal.torchscript_exporter import utils as ts_utils
 
 # Store original references before patching
 _original_setup_trace_module_map = onnx_utils._setup_trace_module_map
 _original_get_module_attributes = getattr(onnx_utils, "_get_module_attributes", None)
-_safe_export_patch_depth = 0
-_safe_export_original_passes = {}
-_SAFE_EXPORT_REQUIRED_PASSES = {
-    "_jit_pass_dce",
-    "_jit_pass_dce_allow_deleting_nodes_with_side_effects",
-}
+_original_track_scope_attrs = getattr(_C, "_jit_pass_onnx_track_scope_attributes", None)
+_original_ts_setup_trace_module_map = ts_utils._setup_trace_module_map
+_original_ts_get_module_attributes = getattr(ts_utils, "_get_module_attributes", None)
 
-
-def _noop(*args, **kwargs):
-    return None
-
-
-def _return_false(*args, **kwargs):
-    return False
-
-
-def _return_graph(graph, *args, **kwargs):
-    return graph
-
-
-def _return_params(_graph, params_dict, *args, **kwargs):
-    return params_dict
-
-
-_SAFE_EXPORT_PASS_REPLACEMENTS = {
-    "_jit_pass_constant_propagation": _noop,
-    "_jit_pass_dce": _noop,
-    "_jit_pass_cse": _return_false,
-    "_jit_pass_canonicalize_graph_fuser_ops": _noop,
-    "_jit_pass_peephole": _noop,
-    "_jit_pass_fuse_addmm": _noop,
-    "_jit_pass_onnx_eval_peephole": _return_params,
-    "_jit_pass_onnx_constant_fold": _return_params,
-    "_jit_pass_dce_allow_deleting_nodes_with_side_effects": _noop,
-    "_jit_pass_canonicalize": _return_graph,
-    "_jit_pass_onnx_graph_shape_type_inference": _noop,
-    "_jit_pass_onnx_deduplicate_initializers": _return_params,
-}
+_PATCHES_ACTIVE = False
+_MISSING_INSTANCE_ATTR = object()
 
 
 def _setup_trace_module_map_patched(
@@ -130,6 +117,13 @@ def _get_module_attributes(module):
 
     import torch.nn
 
+    def _is_safe_value(value):
+        if isinstance(value, (int, float, bool, str, torch.Tensor)) or value is None:
+            return True
+        if isinstance(value, (list, tuple)):
+            return all(_is_safe_value(item) for item in value)
+        return False
+
     annotations = typing.get_type_hints(type(module))
     base_m_annotations = typing.get_type_hints(torch.nn.Module)
     [annotations.pop(k, None) for k in base_m_annotations]
@@ -137,71 +131,140 @@ def _get_module_attributes(module):
     attrs = {}
     for k in annotations:
         try:
-            attrs[k] = getattr(module, k)
+            value = getattr(module, k)
+            if _is_safe_value(value):
+                attrs[k] = value
         except AttributeError:
             _C._jit_onnx_log(f"Skipping module attribute '{k}'")
             continue
     return attrs
 
 
-def _enable_safe_export_pass_patches(keep_passes=None):
-    global _safe_export_patch_depth
-
-    keep_passes = _SAFE_EXPORT_REQUIRED_PASSES | set(keep_passes or ())
-    if _safe_export_patch_depth == 0:
-        _safe_export_original_passes.clear()
-        for name, replacement in _SAFE_EXPORT_PASS_REPLACEMENTS.items():
-            if name in keep_passes:
-                continue
-            if hasattr(_C, name):
-                _safe_export_original_passes[name] = getattr(_C, name)
-                setattr(_C, name, replacement)
-    _safe_export_patch_depth += 1
-
-
-def _disable_safe_export_pass_patches():
-    global _safe_export_patch_depth
-
-    if _safe_export_patch_depth == 0:
-        return
-
-    _safe_export_patch_depth -= 1
-    if _safe_export_patch_depth == 0:
-        for name, original in _safe_export_original_passes.items():
-            setattr(_C, name, original)
-        _safe_export_original_passes.clear()
-
-
-@contextmanager
-def layerwise_safe_onnx_export_patches(enabled: bool = True, keep_passes=None):
-    """Temporarily disable expensive ONNX exporter passes for layerwise prefill.
-
-    This is a no-op unless the caller explicitly enables it. Regular/non-layerwise
-    export should pass ``enabled=False`` so it keeps the original PyTorch ONNX
-    exporter behavior. DCE stays enabled by default because some exported graphs
-    need it to remove aten/prim nodes before PyTorch serializes ONNX.
-    ``keep_passes`` can retain additional passes.
-    """
-    if not enabled:
-        yield
-        return
-
-    _enable_safe_export_pass_patches(keep_passes=keep_passes)
-    try:
-        yield
-    finally:
-        _disable_safe_export_pass_patches()
+def _track_scope_attributes_patched(graph, attrs):
+    """Ensure scope attributes passed to ONNX are IValue-compatible."""
+    safe_attrs = {}
+    for key, value in attrs.items():
+        if isinstance(value, (int, float, bool, str, torch.Tensor)) or value is None:
+            safe_attrs[key] = value
+        elif isinstance(value, (list, tuple)) and all(
+            isinstance(item, (int, float, bool, str, torch.Tensor)) or item is None for item in value
+        ):
+            safe_attrs[key] = value
+    return _original_track_scope_attrs(graph, safe_attrs)
 
 
 def apply_torch_patches():
-    """Apply monkey patches for ONNX export."""
+    """Apply monkey patches for ONNX export (TorchScript path)."""
+    global _PATCHES_ACTIVE
+    if _PATCHES_ACTIVE:
+        return
+
     onnx_utils._setup_trace_module_map = _setup_trace_module_map_patched
     if hasattr(onnx_utils, "_get_module_attributes"):
         onnx_utils._get_module_attributes = _get_module_attributes
+    ts_utils._setup_trace_module_map = _setup_trace_module_map_patched
+    if hasattr(ts_utils, "_get_module_attributes"):
+        ts_utils._get_module_attributes = _get_module_attributes
+    if _original_track_scope_attrs is not None:
+        _C._jit_pass_onnx_track_scope_attributes = _track_scope_attributes_patched
+
+    _PATCHES_ACTIVE = True
 
 
 def undo_torch_patches():
     """Undo monkey patches and restore original functions."""
+    global _PATCHES_ACTIVE
+    if not _PATCHES_ACTIVE:
+        return
+
     onnx_utils._setup_trace_module_map = _original_setup_trace_module_map
     if _original_get_module_attributes:
         onnx_utils._get_module_attributes = _original_get_module_attributes
+    ts_utils._setup_trace_module_map = _original_ts_setup_trace_module_map
+    if _original_ts_get_module_attributes:
+        ts_utils._get_module_attributes = _original_ts_get_module_attributes
+    if _original_track_scope_attrs is not None:
+        _C._jit_pass_onnx_track_scope_attributes = _original_track_scope_attrs
+
+    _PATCHES_ACTIVE = False
+
+
+@contextmanager
+def temporarily_enable_nested_compile_regions(model, target_classes=None):
+    """
+    Wrap selected module ``forward`` methods with ``nested_compile_region``
+    during export so repeated block functions are materialized by dynamo.
+    """
+
+    target_classes = tuple(target_classes) if target_classes else None
+    patched_modules = []
+
+    try:
+        for module in model.modules():
+            if target_classes and not isinstance(module, target_classes):
+                continue
+
+            bound_forward = getattr(module, "forward", None)
+            if bound_forward is None:
+                continue
+
+            wrapped_forward = getattr(bound_forward, "__func__", bound_forward)
+            if getattr(wrapped_forward, "__qualname__", "") == "mark_compile_region.<locals>.wrap.<locals>.inner":
+                continue
+
+            previous_forward = module.__dict__.get("forward", _MISSING_INSTANCE_ATTR)
+            nested_forward = torch.compiler.nested_compile_region(wrapped_forward)
+            setattr(module, "forward", nested_forward.__get__(module, type(module)))
+            patched_modules.append((module, previous_forward))
+
+        yield
+    finally:
+        for module, previous_forward in reversed(patched_modules):
+            if previous_forward is _MISSING_INSTANCE_ATTR:
+                delattr(module, "forward")
+            else:
+                setattr(module, "forward", previous_forward)
+
+
+@contextmanager
+def temporarily_disable_nested_compile_regions(model, target_classes=None):
+    """
+    Replace nested_compile_region-wrapped ``forward`` methods with their original
+    underlying functions for the duration of plain dynamo export.
+    """
+
+    target_classes = tuple(target_classes) if target_classes else None
+    patched_modules = []
+
+    try:
+        for module in model.modules():
+            if target_classes and not isinstance(module, target_classes):
+                continue
+
+            bound_forward = getattr(module, "forward", None)
+            if bound_forward is None:
+                continue
+
+            wrapped_forward = getattr(bound_forward, "__func__", bound_forward)
+            if getattr(wrapped_forward, "__qualname__", "") != "mark_compile_region.<locals>.wrap.<locals>.inner":
+                continue
+
+            closure = getattr(wrapped_forward, "__closure__", None) or ()
+            original_forward = next(
+                (cell.cell_contents for cell in closure if inspect.isfunction(cell.cell_contents)),
+                None,
+            )
+            if original_forward is None:
+                continue
+
+            previous_forward = module.__dict__.get("forward", _MISSING_INSTANCE_ATTR)
+            setattr(module, "forward", original_forward.__get__(module, type(module)))
+            patched_modules.append((module, previous_forward))
+
+        yield
+    finally:
+        for module, previous_forward in reversed(patched_modules):
+            if previous_forward is _MISSING_INSTANCE_ATTR:
+                delattr(module, "forward")
+            else:
+                setattr(module, "forward", previous_forward)

@@ -4,5 +4,3 @@
 # SPDX-License-Identifier: BSD-3-Clause
 #
 # -----------------------------------------------------------------------------
-
-from QEfficient.exporter.weight_spec import load_weight_spec, resolve_weight_spec_path  # noqa: F401

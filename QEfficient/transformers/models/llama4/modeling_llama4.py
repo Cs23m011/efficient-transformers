@@ -28,6 +28,7 @@ from transformers.models.llama4.modeling_llama4 import (
     Llama4TextModel,
     Llama4TextMoe,
     Llama4VisionAttention,
+    Llama4VisionEncoderLayer,
     Llama4VisionModel,
     logger,
     repeat_kv,
@@ -548,6 +549,7 @@ class QEffLlama4TextDecoderLayer(Llama4TextDecoderLayer):
     - add new args batch idx for the CB models
     """
 
+    @torch.compiler.nested_compile_region
     def forward(
         self,
         hidden_states: torch.Tensor,
@@ -1289,3 +1291,9 @@ class QEffLlama4ForConditionalGeneration(Llama4ForConditionalGeneration):
                 shape=("max_num_tiles", 3, "img_size", "img_size"),
             ),
         ]
+
+
+class QEffLlama4VisionEncoderLayer(Llama4VisionEncoderLayer):
+    @torch.compiler.nested_compile_region
+    def forward(self, *args, **kwargs):
+        return super().forward(*args, **kwargs)
