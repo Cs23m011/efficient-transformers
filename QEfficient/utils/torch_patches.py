@@ -201,6 +201,7 @@ def _patch_gen_schema_debug():
             raise
 
     _hop_utils.materialize_as_graph = _debug_materialize_as_graph
+    _PATCHES_ACTIVE = True
 
 
 def undo_torch_patches():

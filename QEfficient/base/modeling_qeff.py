@@ -85,6 +85,27 @@ def _upsert_metadata_prop(model, key: str, value: str) -> None:
     model.metadata_props.append(onnx.StringStringEntryProto(key=key, value=value))
 
 
+
+def _prune_unused_fake_initializers(onnx_program) -> None:
+    initializers = onnx_program.model.graph.initializers
+    used_names = {name for node in onnx_program.model.graph for name in node.inputs}
+    used_names.update(output.name for output in onnx_program.model.graph.outputs)
+
+    for name in list(initializers):
+        const_value = getattr(initializers[name], "const_value", None)
+        raw_value = getattr(const_value, "raw", None)
+        if isinstance(raw_value, FakeTensor) and name not in used_names:
+            del initializers[name]
+
+
+def _upsert_metadata_prop(model, key: str, value: str) -> None:
+    for entry in model.metadata_props:
+        if entry.key == key:
+            entry.value = value
+            return
+    model.metadata_props.append(onnx.StringStringEntryProto(key=key, value=value))
+
+
 logger = logging.getLogger(__name__)
 
 

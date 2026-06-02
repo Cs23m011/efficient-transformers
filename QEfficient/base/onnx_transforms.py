@@ -874,6 +874,12 @@ class OnnxTransformPipeline(BaseOnnxTransform):
         if RenameRepeatedSubgraphTransform in requested:
             applied[RenameRepeatedSubgraphTransform] = RenameRepeatedSubgraphTransform.apply(model, **kwargs)
 
+        if PreserveNestedCacheRetainedStateTransform in requested:
+            applied[PreserveNestedCacheRetainedStateTransform] = PreserveNestedCacheRetainedStateTransform.apply(model)
+
+        if RenameRepeatedSubgraphTransform in requested:
+            applied[RenameRepeatedSubgraphTransform] = RenameRepeatedSubgraphTransform.apply(model, **kwargs)
+
         if AdapterWeightsToInputsTransform in requested:
             applied[AdapterWeightsToInputsTransform] = AdapterWeightsToInputsTransform.apply(model, **kwargs)
 

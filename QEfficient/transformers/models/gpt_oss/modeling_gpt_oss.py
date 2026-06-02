@@ -863,6 +863,9 @@ def eager_attention_forward(
     if attention_mask is not None:
         masked_fill = torch.full_like(attn_weights, MIN_MASKED_ATTENTION_VALUE, dtype=torch.float32)
         attn_weights = torch.where(attention_mask, masked_fill, attn_weights)
+        attn_weights = torch.where(
+            attention_mask, torch.full_like(attn_weights, MIN_MASKED_ATTENTION_VALUE), attn_weights
+        )
 
     sinks = module.sinks.reshape(1, -1, 1, 1).expand(query.shape[0], -1, query.shape[-2], -1)
     combined_logits = torch.cat([attn_weights, sinks], dim=-1)
@@ -876,6 +879,55 @@ def eager_attention_forward(
     attn_output = torch.matmul(attn_weights, value_states)
     attn_output = attn_output.transpose(1, 2).contiguous()
     return attn_output, attn_weights
+
+
+def eager_attention_forward_blocked(
+    module: nn.Module,
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    attention_mask: Optional[torch.Tensor],
+    scaling: float,
+    **kwargs,
+):
+    key_states = repeat_kv(key, module.num_key_value_groups)
+    value_states = repeat_kv(value, module.num_key_value_groups)
+
+    BS, NH, CL, DH = query.shape
+    target_blocks = int(os.environ.get("NUM_Q_BLOCKS", 1))
+    block_positions = []
+    for j in range(target_blocks):
+        block_positions.append(j * (CL // target_blocks))
+    block_count = 0
+
+    outs = []
+    for block_idx in range(target_blocks):
+        block_count += 1
+        qi = block_positions[block_idx]
+
+        # Calculate block size (last block should be handled with remainder)
+        if block_idx == target_blocks - 1:
+            real_q_len = CL - qi
+        else:
+            real_q_len = block_positions[block_idx + 1] - qi
+
+        q_block = query[:, :, qi : qi + real_q_len, :]
+        scores = torch.matmul(q_block, key_states.transpose(2, 3)) * scaling
+        attn_mask_block = attention_mask[:, :, qi : qi + real_q_len, :]
+        curr_attn_weights = torch.where(attn_mask_block, torch.full_like(scores, MIN_MASKED_ATTENTION_VALUE), scores)
+        sinks = module.sinks.reshape(1, -1, 1, 1).expand(
+            curr_attn_weights.shape[0], -1, curr_attn_weights.shape[-2], -1
+        )
+        combined_logits = torch.cat([curr_attn_weights, sinks], dim=-1)
+        combined_logits = combined_logits - combined_logits.max(dim=-1, keepdim=True).values
+        curr_attn_weights = nn.functional.softmax(combined_logits, dim=-1, dtype=torch.float32)
+        curr_attn_weights = curr_attn_weights[..., :-1]
+        out_block = torch.matmul(curr_attn_weights, value_states)
+        outs.append(out_block)
+    output = torch.cat(outs, dim=2)
+
+    output = output.view(BS, NH, CL, DH).transpose(1, 2).contiguous()
+    return output, output
 
 
 def opt_eager_attention_forward_blocked(
@@ -923,9 +975,7 @@ def opt_eager_attention_forward_blocked(
             attn_mask_block = attention_mask[:, :, qi : qi + real_q_len, :]
 
         scores = torch.matmul(q_block, k_block.transpose(2, 3)) * scaling
-        curr_attn_weights = torch.where(
-            attn_mask_block, torch.tensor(MIN_MASKED_ATTENTION_VALUE, dtype=module.config.torch_dtype), scores
-        )
+        curr_attn_weights = torch.where(attn_mask_block, torch.full_like(scores, MIN_MASKED_ATTENTION_VALUE), scores)
         sinks = module.sinks.reshape(1, -1, 1, 1).expand(
             curr_attn_weights.shape[0], -1, curr_attn_weights.shape[-2], -1
         )
@@ -1186,6 +1236,7 @@ class QEffGptOssAttention(GptOssAttention):
 
 
 class QEffGptOssDecoderLayer(GptOssDecoderLayer):
+    @torch.compiler.nested_compile_region
     def forward(
         self,
         hidden_states: torch.Tensor,

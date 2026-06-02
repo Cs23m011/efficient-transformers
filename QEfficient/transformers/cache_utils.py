@@ -398,7 +398,7 @@ class QEffDynamicLayer(CacheLayerMixin):
                 k_out = CtxGatherFunc.apply(k_out, ctx_indices, ctx_len)
                 v_out = CtxGatherFunc.apply(v_out, ctx_indices, ctx_len)
             invalid_mask = _match_invalid_mask(invalid_mask, v_out.shape[-2])
-            v_out = torch.where(invalid_mask.unsqueeze(-1), torch.tensor(0.0, dtype=torch.float32), v_out)
+            v_out = torch.where(invalid_mask.unsqueeze(-1), torch.zeros_like(v_out), v_out)
 
         return k_out, v_out
 
@@ -481,10 +481,25 @@ class QEffDynamicLayer(CacheLayerMixin):
                 k_out = ctx_gather_3d_interface(k_out, ctx_indices)
                 v_out = ctx_gather_3d_interface(v_out, ctx_indices)
 
+            if batch_index is not None:
+                ctx_gather_cb_3d_interface = select_interface(
+                    CtxGatherFuncCB3D.apply,
+                    torch.ops.qefficient.ctx_gather_cb_3d,
+                )
+                k_out = ctx_gather_cb_3d_interface(k_out, batch_index, ctx_indices)
+                v_out = ctx_gather_cb_3d_interface(v_out, batch_index, ctx_indices)
+            else:
+                ctx_gather_3d_interface = select_interface(
+                    CtxGatherFunc3D.apply,
+                    torch.ops.qefficient.ctx_gather_3d,
+                )
+                k_out = ctx_gather_3d_interface(k_out, ctx_indices)
+                v_out = ctx_gather_3d_interface(v_out, ctx_indices)
+
             invalid_mask = _match_invalid_mask(invalid_mask, v_out.shape[-2])
             v_out = torch.where(invalid_mask.unsqueeze(-1), torch.zeros_like(v_out), v_out)
             invalid_mask = _match_invalid_mask(invalid_mask, v_out.shape[-2])
-            v_out = torch.where(invalid_mask.unsqueeze(-1), torch.tensor(0.0, dtype=torch.float32), v_out)
+            v_out = torch.where(invalid_mask.unsqueeze(-1), torch.zeros_like(v_out), v_out)
 
         return k_out, v_out
 
@@ -947,6 +962,7 @@ class QEffHybridCache(HybridCache):
             ctx_indices = torch.where(invalid_mask, invalid_idx_value, ctx_indices)
 
             all_indices = torch.arange(layer_ctx_len, device=kv_position_ids.device) + kv_position_ids.max() + 1
+            all_indices = torch.arange(layer_ctx_len) + kv_position_ids.max() + 1
             rolling_indices = torch.where(
                 all_indices > layer_ctx_len - 1,
                 _remainder_with_symbolic_divisor(all_indices, layer_ctx_len),
@@ -1076,6 +1092,7 @@ class QEffHybridChunkedCache(HybridChunkedCache):
 
             # Rolling indices for sliding window
             all_indices = torch.arange(layer_ctx_len, device=kv_position_ids.device) + kv_position_ids.max() + 1
+            all_indices = torch.arange(layer_ctx_len) + kv_position_ids.max() + 1
             rolling_indices = torch.where(
                 all_indices > layer_ctx_len - 1,
                 _remainder_with_symbolic_divisor(all_indices, layer_ctx_len),

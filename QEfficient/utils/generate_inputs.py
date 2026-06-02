@@ -229,7 +229,6 @@ class InputHandler:
         attention_mask = inputs.get("attention_mask")
         batch_size, input_len = input_ids.shape
         batch_size, input_len = input_ids.shape
-        inputs.pop("attention_mask")
         inputs.pop("token_type_ids", None)
         position_ids = np.arange(input_len).reshape(1, -1)
         inputs["input_ids"] = np.concatenate(

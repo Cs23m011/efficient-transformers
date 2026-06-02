@@ -88,6 +88,7 @@ def _(
     head_dim = data.shape[-1]
     ctx_len_out = ctx_indices.shape[-1]
     return torch.empty(batch, heads, ctx_len_out, head_dim, dtype=data.dtype, device=data.device)
+    return torch.empty_like(data)
 
 
 # SCATTER CB (4D with heads, context, etc.)

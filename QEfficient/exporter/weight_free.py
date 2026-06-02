@@ -9,6 +9,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 import json
+
 import numpy as np
 import onnx_ir as ir
 import torch
@@ -105,6 +106,8 @@ def _build_meta_qeff_model(qeff_model):
         )
 
     quant_config = getattr(qeff_model.model.config, "quantization_config", None)
+    if getattr(qeff_model.model.config, "quantization_config", None) is not None:
+        raise NotImplementedError("Weight-free export is not implemented yet for quantized causal LM checkpoints.")
 
     config = copy.deepcopy(qeff_model.model.config)
     config.torch_dtype = torch.float32
@@ -113,6 +116,7 @@ def _build_meta_qeff_model(qeff_model):
 
     if quant_config is None:
         meta_model = meta_model.to(dtype=torch.float32)
+    meta_model = meta_model.to(dtype=torch.float32)
 
     meta_qeff_model = qeff_model.__class__(
         meta_model,
@@ -284,6 +288,7 @@ def export_weight_free_onnx(
     meta_example_inputs = _to_meta(example_inputs)
     model_ref = meta_qeff_model.hash_params["pretrained_model_name_or_path"]
     meta_qeff_model.model.requires_grad_(False)
+
     with export_context:
         onnx_program = torch.onnx.export(
             meta_qeff_model.model,
@@ -322,6 +327,7 @@ def _load_checkpoint_tensor(checkpoint_file: str, key: str) -> np.ndarray:
     if tensor.dtype == torch.bfloat16:
         tensor = tensor.to(torch.float32)
     return tensor.numpy()
+    return handle.get_tensor(key).detach().cpu().numpy()
 
 
 def _default_weights_roots(weight_spec_path: Path, spec) -> List[Path]:

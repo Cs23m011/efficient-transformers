@@ -355,6 +355,7 @@ def _setup_onnx_subfunctions(qeff_model, args, kwargs):
                     or "k_pe" in name
                     or "indexer_key_cache" in name
                 )
+                and ("key" in name or "value" in name or "compressed_kv" in name or "k_pe" in name)
                 else name
                 for name in kwargs["output_names"]
             ]
