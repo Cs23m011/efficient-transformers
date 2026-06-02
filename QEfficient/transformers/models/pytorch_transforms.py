@@ -409,6 +409,16 @@ from QEfficient.transformers.models.glm_moe_dsa.modeling_glm_moe_dsa import (
     QEffGlmMoeDsaRotaryEmbedding,
     QEffGlmMoeDsaTopkRouter,
 )
+from QEfficient.transformers.models.glm4_moe.modeling_glm4_moe import (
+    QEffGlm4MoeAttention,
+    QEffGlm4MoeDecoderLayer,
+    QEffGlm4MoeForCausalLM,
+    QEffGlm4MoeModel,
+    QEffGlm4MoeMoE,
+    QEffGlm4MoeRotaryEmbedding,
+    QEffGlm4MoeTopkRouter,
+    QEffPrefillChunkedGlm4MoeMoE,
+)
 from QEfficient.transformers.models.gpt2.modeling_gpt2 import (
     QEffGPT2Attention,
     QEffGPT2Block,
