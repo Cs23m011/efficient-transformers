@@ -468,13 +468,26 @@ class QEffGptOssMLP(GptOssMLP):
     # ------------------- Gather based, weights as activation approach, With Seperate Gate, up Projections ---------------
     def forward(self, hidden_states):
         bs, seq_len, _ = hidden_states.shape
-        hidden_states = hidden_states.view(bs * seq_len, self.experts.hidden_size)
+        hidden_flat = hidden_states.view(bs * seq_len, self.experts.hidden_size)
 
         # Router computation
-        router_logits = F.linear(hidden_states, self.router.weight, self.router.bias)
+        router_logits = F.linear(hidden_flat, self.router.weight, self.router.bias)
         router_top_value, router_indices = torch.topk(router_logits, self.router.top_k, dim=-1)
         router_top_value = torch.nn.functional.softmax(router_top_value, dim=1, dtype=router_top_value.dtype)
 
+        # For MXFP4 experts: dispatch to packed forward with full routing weight matrix.
+        # QEffMxfp4GptOssExperts.forward expects routing_weights of shape (bs*seq, num_experts)
+        # and multiplies each expert's dense output by its routing weight (zero for non-selected).
+        if hasattr(self.experts, "gate_up_proj_blocks"):
+            routing_weights_full = torch.zeros(
+                bs * seq_len, self.experts.num_experts,
+                dtype=hidden_flat.dtype, device=hidden_flat.device,
+            )
+            routing_weights_full.scatter_(1, router_indices, router_top_value)
+            experts_out = self.experts(hidden_flat, routing_weights=routing_weights_full)
+            return experts_out.view(bs, seq_len, self.experts.hidden_size), router_logits
+
+        hidden_states = hidden_flat
         # GATHER - collect weights for selected experts (separate gate and up projections)
         gate_proj = self.experts.gate_proj[router_indices.flatten()]
         gate_proj_bias = self.experts.gate_proj_bias[router_indices.flatten()]
@@ -642,7 +655,7 @@ def rotate_half(x):
     return torch.cat((-x2, x1), dim=-1)
 
 
-def qeff_apply_rotary_pos_emb(q, k, cos, sin):
+def qeff_apply_rotary_pos_emb(q, k, cos, sin,position_ids=None, unsqueeze_dim=1):
     """Applies Rotary Position Embedding with Multimodal Sections to the query and key tensors (https://qwenlm.github.io/blog/qwen2-vl/).
 
     Explanation:
@@ -662,7 +675,11 @@ def qeff_apply_rotary_pos_emb(q, k, cos, sin):
     Returns:
         `tuple(torch.Tensor)` comprising of the query and key tensors rotated using the Rotary Position Embedding.
     """
-
+    if position_ids is not None:
+        cos = cos[position_ids].unsqueeze(unsqueeze_dim)
+        sin = sin[position_ids].unsqueeze(unsqueeze_dim)
+    cos = cos.to(device=q.device)
+    sin = sin.to(device=q.device)
     q_embed = (q * cos) + (rotate_half(q) * sin)
     k_embed = (k * cos) + (rotate_half(k) * sin)
 
@@ -684,9 +701,8 @@ def eager_attention_forward(
 
     attn_weights = torch.matmul(query, key_states.transpose(2, 3)) * scaling
     if attention_mask is not None:
-        attn_weights = torch.where(
-            attention_mask, torch.full_like(attn_weights, MIN_MASKED_ATTENTION_VALUE), attn_weights
-        )
+        masked_fill = torch.full_like(attn_weights, MIN_MASKED_ATTENTION_VALUE, dtype=torch.float32)
+        attn_weights = torch.where(attention_mask, masked_fill, attn_weights)
 
     sinks = module.sinks.reshape(1, -1, 1, 1).expand(query.shape[0], -1, query.shape[-2], -1)
     combined_logits = torch.cat([attn_weights, sinks], dim=-1)
