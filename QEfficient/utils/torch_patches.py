@@ -168,7 +168,39 @@ def apply_torch_patches():
     if _original_track_scope_attrs is not None:
         _C._jit_pass_onnx_track_scope_attributes = _track_scope_attributes_patched
 
+    _patch_gen_schema_debug()
     _PATCHES_ACTIVE = True
+
+
+def _patch_gen_schema_debug():
+    """Temporary debug patch: print placeholder names when materialize_as_graph
+    fails with a missing-arg TypeError so we can identify arg26_1."""
+    try:
+        import torch._higher_order_ops.invoke_subgraph as _isg
+        import torch._higher_order_ops.utils as _hop_utils
+    except ImportError:
+        return
+
+    _orig_mat = _hop_utils.materialize_as_graph
+
+    def _debug_materialize_as_graph(fn, args, **kwargs):
+        try:
+            return _orig_mat(fn, args, **kwargs)
+        except TypeError as e:
+            if "missing" in str(e) and "positional argument" in str(e):
+                if hasattr(fn, "graph"):
+                    names = [n for n in fn.graph.nodes if n.op == "placeholder"]
+                    print(f"\n[DEBUG] Compiled graph: {len(names)} placeholders, {len(args)} operands passed")
+                    print("[DEBUG] Placeholder → first user:")
+                    for i, node in enumerate(names):
+                        users = list(node.users.keys())
+                        first_user = users[0] if users else None
+                        user_info = f"{first_user.op}:{first_user.target}" if first_user else "unused"
+                        marker = " ← MISSING" if i >= len(args) else ""
+                        print(f"  arg{i}: {node.name}  used_by={user_info}{marker}")
+            raise
+
+    _hop_utils.materialize_as_graph = _debug_materialize_as_graph
 
 
 def undo_torch_patches():

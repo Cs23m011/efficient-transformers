@@ -408,6 +408,7 @@ def convert_moe_packed_tensors(
     *,
     dtype: torch.dtype = torch.bfloat16,
     rows_per_chunk: int = 32768 * 1024,
+    lut: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """
     reference for this function is taken from: https://github.com/huggingface/transformers/tree/main/src/transformers/models/gpt_oss#L98
@@ -417,7 +418,10 @@ def convert_moe_packed_tensors(
 
     assert blocks.shape[:-1] == scales.shape, f"{blocks.shape=} does not match {scales.shape=}"
 
-    lut = torch.tensor(FP4_VALUES, dtype=dtype, device=blocks.device)
+    if lut is None:
+        lut = torch.tensor(FP4_VALUES, dtype=dtype, device=blocks.device)
+    else:
+        lut = lut.to(dtype=dtype, device=blocks.device)
 
     *prefix_shape, G, B = blocks.shape
     rows_total = math.prod(prefix_shape) * G

@@ -13,7 +13,7 @@ import torch.nn as nn
 from transformers.quantizers.quantizer_mxfp4 import Mxfp4HfQuantizer
 from transformers.utils.quantization_config import Mxfp4Config
 
-from QEfficient.transformers.quantizers.quantizer_utils import convert_moe_packed_tensors, get_keys_to_not_convert
+from QEfficient.transformers.quantizers.quantizer_utils import FP4_VALUES, convert_moe_packed_tensors, get_keys_to_not_convert
 from QEfficient.utils.logging_utils import logger
 
 
@@ -55,11 +55,23 @@ class QEffMxfp4GptOssExperts(nn.Module):
         self.gate_up_proj_precision_config = None
         self.down_proj_precision_config = None
 
+        # Pre-register FP4 lookup table as a buffer so dynamo treats it as a
+        # module attribute rather than a locally-created tensor inside forward.
+        # Without this, dynamo lifts the lut as a phantom graph placeholder that
+        # invoke_subgraph cannot find in its operand list, causing arg-count mismatch.
+        self.register_buffer(
+            "fp4_lut",
+            torch.tensor(FP4_VALUES, dtype=torch.float32),
+            persistent=False,
+        )
+
     def forward(self, hidden_states: torch.Tensor, router_indices=None, routing_weights=None) -> torch.Tensor:
         gate_up_proj = convert_moe_packed_tensors(
-            self.gate_up_proj_blocks, self.gate_up_proj_scales, dtype=torch.float32
+            self.gate_up_proj_blocks, self.gate_up_proj_scales, dtype=torch.float32, lut=self.fp4_lut
         )
-        down_proj = convert_moe_packed_tensors(self.down_proj_blocks, self.down_proj_scales, dtype=torch.float32)
+        down_proj = convert_moe_packed_tensors(
+            self.down_proj_blocks, self.down_proj_scales, dtype=torch.float32, lut=self.fp4_lut
+        )
         batch_size = hidden_states.shape[0]
         hidden_states = hidden_states.reshape(-1, self.hidden_size)  # (num_tokens, hidden_size)
         num_experts = routing_weights.shape[1]
