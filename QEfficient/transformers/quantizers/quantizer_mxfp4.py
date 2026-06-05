@@ -63,6 +63,12 @@ class QEffMxfp4GptOssExperts(nn.Module):
             torch.tensor(FP4_VALUES, dtype=torch.float32),
             requires_grad=False,
         )
+        # Dummy parameter whose first use in forward() must come AFTER down_proj_bias's
+        # first use. PyTorch invoke_subgraph drops the placeholder with the highest
+        # index (= latest first-use) from its operand list. By making this dummy's
+        # first use the very last in the graph we ensure down_proj_bias is included.
+        # The dummy contributes nothing to the output (multiplied by 0).
+        self._ias_dummy = nn.Parameter(torch.zeros(1), requires_grad=False)
 
     def forward(self, hidden_states: torch.Tensor, router_indices=None, routing_weights=None) -> torch.Tensor:
         gate_up_proj = convert_moe_packed_tensors(
@@ -86,13 +92,10 @@ class QEffMxfp4GptOssExperts(nn.Module):
         next_states = next_states.view(num_experts, batch_size, -1, self.hidden_size)
         next_states = next_states * routing_weights.transpose(0, 1).view(num_experts, batch_size, -1)[..., None]
         next_states = next_states.sum(dim=0)
-        # Workaround: access fp4_lut after down_proj_bias so that fp4_lut becomes
-        # the last-accessed parameter in the graph. PyTorch's invoke_subgraph has a
-        # bug where it drops exactly the last-accessed module parameter from its
-        # operand list. fp4_lut is a constant LUT so being an embedded ONNX value
-        # is acceptable; down_proj_bias must be in operands to reach the checkpoint.
-        next_states = next_states + (self.fp4_lut[0] - self.fp4_lut[0])
-        return next_states
+        # First use of _ias_dummy must come after down_proj_bias's first use so that
+        # _ias_dummy gets the highest placeholder index and is the one invoke_subgraph
+        # drops. down_proj_bias then has a lower index and is included in operands.
+        return next_states + self._ias_dummy[0] * 0
 
 
 def should_convert_module(current_key_name, patterns):
