@@ -130,10 +130,24 @@ def _build_meta_qeff_model(qeff_model):
         # no weight loading) AFTER __init__ so that Mxfp4GptOssExpertDequantizeTransform —
         # which is part of _pytorch_transforms and targets QEffMxfp4GptOssExperts — has
         # already run as a no-op and will not undo the replacement below.
-        from QEfficient.transformers.quantizers.auto import QEFF_AUTO_QUANTIZER_MAPPING
+        from QEfficient.transformers.quantizers.auto import QEFF_AUTO_QUANTIZATION_CONFIG_MAPPING, QEFF_AUTO_QUANTIZER_MAPPING
 
-        quant_method = getattr(quant_config, "quant_method", None) or getattr(quant_config, "quant_type", None)
-        quant_type = quant_method.value if hasattr(quant_method, "value") else quant_method
+        # quantization_config may be a plain dict (AutoConfig.from_pretrained) or a proper
+        # config object (QEFFAutoModelForCausalLM.from_pretrained).  Normalise to an object.
+        if isinstance(quant_config, dict):
+            quant_type = quant_config.get("quant_method") or quant_config.get("quant_type")
+            config_cls = QEFF_AUTO_QUANTIZATION_CONFIG_MAPPING.get(quant_type)
+            if config_cls is None:
+                raise NotImplementedError(
+                    f"Weight-free export is not implemented for quantization type '{quant_type}'. "
+                    "Supported: mxfp4"
+                )
+            init_kwargs = {k: v for k, v in quant_config.items() if k != "quant_method"}
+            quant_config = config_cls(**init_kwargs)
+        else:
+            quant_method = getattr(quant_config, "quant_method", None) or getattr(quant_config, "quant_type", None)
+            quant_type = quant_method.value if hasattr(quant_method, "value") else quant_method
+
         quantizer_cls = QEFF_AUTO_QUANTIZER_MAPPING.get(quant_type) if quant_type else None
         if quantizer_cls is None:
             raise NotImplementedError(
