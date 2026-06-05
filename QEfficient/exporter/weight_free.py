@@ -132,7 +132,8 @@ def _build_meta_qeff_model(qeff_model):
         # already run as a no-op and will not undo the replacement below.
         from QEfficient.transformers.quantizers.auto import QEFF_AUTO_QUANTIZER_MAPPING
 
-        quant_type = getattr(quant_config, "quant_type", None)
+        quant_method = getattr(quant_config, "quant_method", None) or getattr(quant_config, "quant_type", None)
+        quant_type = quant_method.value if hasattr(quant_method, "value") else quant_method
         quantizer_cls = QEFF_AUTO_QUANTIZER_MAPPING.get(quant_type) if quant_type else None
         if quantizer_cls is None:
             raise NotImplementedError(
