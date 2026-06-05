@@ -55,14 +55,13 @@ class QEffMxfp4GptOssExperts(nn.Module):
         self.gate_up_proj_precision_config = None
         self.down_proj_precision_config = None
 
-        # Pre-register FP4 lookup table as a buffer so dynamo treats it as a
-        # module attribute rather than a locally-created tensor inside forward.
-        # Without this, dynamo lifts the lut as a phantom graph placeholder that
-        # invoke_subgraph cannot find in its operand list, causing arg-count mismatch.
-        self.register_buffer(
-            "fp4_lut",
+        # Pre-register FP4 lookup table as a non-gradient parameter so dynamo
+        # treats it as a proper module parameter and invoke_subgraph includes it
+        # in its operand list. register_buffer(persistent=False) is excluded from
+        # invoke_subgraph operands; nn.Parameter(requires_grad=False) is not.
+        self.fp4_lut = nn.Parameter(
             torch.tensor(FP4_VALUES, dtype=torch.float32),
-            persistent=False,
+            requires_grad=False,
         )
 
     def forward(self, hidden_states: torch.Tensor, router_indices=None, routing_weights=None) -> torch.Tensor:
@@ -150,7 +149,7 @@ class QEffMxfp4HfQuantizer(Mxfp4HfQuantizer):
                 if not should_convert_module(current_key_name, modules_to_not_convert):
                     current_key_name.pop(-1)
                     continue
-                if module.__class__.__name__ == "GptOssExperts" and not quantization_config.dequantize:
+                if module.__class__.__name__ in ("GptOssExperts", "QEffGptOssExperts") and not quantization_config.dequantize:
                     model._modules[name] = QEffMxfp4GptOssExperts(config)
                     has_been_replaced = True
                 if len(list(module.children())) > 0:
