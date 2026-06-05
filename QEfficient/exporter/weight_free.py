@@ -104,14 +104,15 @@ def _build_meta_qeff_model(qeff_model):
             "Pass `pretrained_model_name_or_path=...` when constructing the QEff model manually."
         )
 
-    if getattr(qeff_model.model.config, "quantization_config", None) is not None:
-        raise NotImplementedError("Weight-free export is not implemented yet for quantized causal LM checkpoints.")
+    quant_config = getattr(qeff_model.model.config, "quantization_config", None)
 
     config = copy.deepcopy(qeff_model.model.config)
     config.torch_dtype = torch.float32
     with init_empty_weights():
         meta_model = qeff_model._hf_auto_class.from_config(config, attn_implementation="eager")
-    meta_model = meta_model.to(dtype=torch.float32)
+
+    if quant_config is None:
+        meta_model = meta_model.to(dtype=torch.float32)
 
     meta_qeff_model = qeff_model.__class__(
         meta_model,
@@ -121,6 +122,29 @@ def _build_meta_qeff_model(qeff_model):
         pretrained_model_name_or_path=model_ref,
     )
     meta_qeff_model.hash_params.update(copy.deepcopy(qeff_model.hash_params))
+
+    if quant_config is not None:
+        # For quantized models the meta model must use the same quantized layer types as the
+        # checkpoint so that ONNX initializer names match the checkpoint's storage keys.
+        # We apply the quantizer's architecture preprocessing (layer-type replacement only,
+        # no weight loading) AFTER __init__ so that Mxfp4GptOssExpertDequantizeTransform —
+        # which is part of _pytorch_transforms and targets QEffMxfp4GptOssExperts — has
+        # already run as a no-op and will not undo the replacement below.
+        from QEfficient.transformers.quantizers.auto import QEFF_AUTO_QUANTIZER_MAPPING
+
+        quant_type = getattr(quant_config, "quant_type", None)
+        quantizer_cls = QEFF_AUTO_QUANTIZER_MAPPING.get(quant_type) if quant_type else None
+        if quantizer_cls is None:
+            raise NotImplementedError(
+                f"Weight-free export is not implemented for quantization type '{quant_type}'. "
+                "Supported: mxfp4"
+            )
+        quantizer = quantizer_cls(quant_config)
+        # Run inside init_empty_weights so newly created quantized layer buffers stay on
+        # the meta device and are treated as weight-spec entries, not embedded constants.
+        with init_empty_weights():
+            quantizer._process_model_before_weight_loading(meta_qeff_model.model)
+
     meta_qeff_model.model.eval()
     return meta_qeff_model
 
