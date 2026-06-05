@@ -86,6 +86,12 @@ class QEffMxfp4GptOssExperts(nn.Module):
         next_states = next_states.view(num_experts, batch_size, -1, self.hidden_size)
         next_states = next_states * routing_weights.transpose(0, 1).view(num_experts, batch_size, -1)[..., None]
         next_states = next_states.sum(dim=0)
+        # Workaround: access fp4_lut after down_proj_bias so that fp4_lut becomes
+        # the last-accessed parameter in the graph. PyTorch's invoke_subgraph has a
+        # bug where it drops exactly the last-accessed module parameter from its
+        # operand list. fp4_lut is a constant LUT so being an embedded ONNX value
+        # is acceptable; down_proj_bias must be in operands to reach the checkpoint.
+        next_states = next_states + (self.fp4_lut[0] - self.fp4_lut[0])
         return next_states
 
 
