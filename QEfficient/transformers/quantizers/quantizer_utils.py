@@ -420,8 +420,8 @@ def convert_moe_packed_tensors(
 
     if lut is None:
         lut = torch.tensor(FP4_VALUES, dtype=dtype, device=blocks.device)
-    else:
-        lut = lut.to(dtype=dtype, device=blocks.device)
+    elif lut.dtype != dtype:
+        lut = lut.to(dtype=dtype)
 
     *prefix_shape, G, B = blocks.shape
     rows_total = math.prod(prefix_shape) * G
