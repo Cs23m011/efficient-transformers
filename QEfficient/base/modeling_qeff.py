@@ -175,6 +175,12 @@ class QEFFBaseModel(ABC):
 
         if self.config.torch_dtype == torch.bfloat16:
             logger.warning("BFloat16 dtype is not yet supported; converting to float16 precision!")
+        target_dtype = self.config.torch_dtype
+        if target_dtype == torch.bfloat16:
+            logger.warning("BFloat16 dtype is not yet supported; converting to float16 precision!")
+            target_dtype = torch.float16
+        self.model = self.model.to(dtype=target_dtype)
+
 
     def _normalize_torch_dtype(self):
         """
@@ -476,6 +482,9 @@ class QEFFBaseModel(ABC):
                                 f"k_pe.{i}",
                             ]
                         )
+                elif param == "indexer_key_cache":
+                    for i in range(len(example_inputs["indexer_key_cache"])):
+                        input_names.append(f"indexer_key_cache.{i}")
                 else:
                     input_names.append(param)
 
@@ -685,6 +694,8 @@ class QEFFBaseModel(ABC):
                     else moe_prefill_packed_chunk_size,
                 }
             )
+        elif specializations:
+            kwargs["prefill_seq_len"] = get_attr_or_key(specializations[0], ("cl", "seq_len", "sequence_length"))
 
         # Transform before export
         qaic_config = (
@@ -726,6 +737,10 @@ class QEFFBaseModel(ABC):
         cache_probe = export_kwargs.pop("_layerwise_cache_probe", False)
         idx = int(get_layerwise_start(self.model))
         end_idx = int(get_layerwise_end(self.model) or idx + 1)
+        **export_kwargs,
+    ) -> str:
+        idx = int(QEFFBaseModel._start)
+        end_idx = int(getattr(QEFFBaseModel, "_end", idx + 1))
         if end_idx <= idx:
             raise ValueError(f"Invalid export window: start={idx}, end={end_idx}")
 
@@ -830,6 +845,9 @@ class QEFFBaseModel(ABC):
         # non-layerwise paths use. The matching input buffers are renamed to pair with these outputs
         # just below via align_kv_input_names_to_retained_outputs. No-op when kv_cache_prefix is falsy.
         output_name = apply_kv_cache_prefix(output_name, kv_cache_prefix)
+        for layer_idx in range(idx, end_idx):
+            output_name.append(f"past_key.{layer_idx}_InternalRetainedState")
+            output_name.append(f"past_value.{layer_idx}_InternalRetainedState")
 
         # For some decoder wrappers (e.g. VLM language wrappers), forward does not accept
         # `inputs_embeds`; keep `input_ids` in those cases.
@@ -846,6 +864,9 @@ class QEFFBaseModel(ABC):
             if embed_dtype is None:
                 embed_dtype = next(self.model.parameters()).dtype
             inputs_embeds = torch.rand(z.shape[0], z.shape[1], hidden_size, device=z.device, dtype=embed_dtype)
+            else:
+                hidden_size = self.model.model.config.hidden_size
+            inputs_embeds = torch.rand(z.shape[0], z.shape[1], hidden_size, device=z.device)
             example_inputs["inputs_embeds"] = inputs_embeds
             dynamic_axes["inputs_embeds"] = dynamic_axes.pop("input_ids")
 
@@ -884,10 +905,31 @@ class QEFFBaseModel(ABC):
                                 _resolve_pkv_names(layer_idx, example_inputs["past_key_values"][layer_offset])
                             )
                         break
+                        if len(example_inputs["past_key_values"][0]) == 2:
+                            for layer_offset in range(len(example_inputs["past_key_values"])):
+                                layer_idx = idx + layer_offset
+                                input_names.extend([f"past_key.{layer_idx}", f"past_value.{layer_idx}"])
+                        elif len(example_inputs["past_key_values"][0]) == 4:
+                            input_names.extend(
+                                [
+                                    f"past_key_self.{i}",
+                                    f"past_value_self.{i}",
+                                    f"past_key_cross.{i}",
+                                    f"past_value_cross.{i}",
+                                ]
+                            )
+                        else:
+                            raise ValueError(
+                                f"Unknown shape of past_key_values! Expected length of past_key_values for each layer to be either 2 or 4 but got {len(example_inputs['past_key_values'][0])}"
+                            )
                 elif param == "compressed_kvs":
                     for layer_offset in range(len(example_inputs["compressed_kvs"])):
                         layer_idx = idx + layer_offset
                         input_names.extend([f"compressed_kv.{layer_idx}", f"k_pe.{layer_idx}"])
+                elif param == "indexer_key_cache":
+                    for layer_offset in range(len(example_inputs["indexer_key_cache"])):
+                        layer_idx = idx + layer_offset
+                        input_names.append(f"indexer_key_cache.{layer_idx}")
                 else:
                     input_names.append(param)
         dynamic_axes = {k: v for k, v in dynamic_axes.items() if k in input_names}
@@ -925,6 +967,18 @@ class QEFFBaseModel(ABC):
                     opset_version=constants.ONNX_EXPORT_OPSET,
                     **export_kwargs,
                 )
+        if not os.path.isfile(layer_onnx_path):
+            torch.onnx.export(
+                self.model,
+                (),
+                layer_onnx_path_tmp,
+                kwargs=example_inputs,
+                input_names=input_names,
+                output_names=output_names,
+                dynamic_axes=dynamic_axes,
+                opset_version=constants.ONNX_EXPORT_OPSET,
+                **export_kwargs,
+            )
             total_end = time.time()
             print(f"\nTotal export time: {total_end - start_time:.2f} seconds")
 
@@ -945,6 +999,7 @@ class QEFFBaseModel(ABC):
         onnx.save(model, layer_onnx_path_tmp)
         self.onnx_path = layer_onnx_path_tmp
         return layer_onnx_path_tmp
+
 
     def transform(
         self,
