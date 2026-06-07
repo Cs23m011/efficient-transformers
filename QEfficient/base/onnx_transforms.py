@@ -249,6 +249,16 @@ class RenameFunctionOutputsTransform(BaseOnnxTransform):
                         orig = node.output[i]
                         if orig.endswith("_InternalRetainedState"):
                             new = orig[: -len("_InternalRetainedState")] + "_RetainedState"
+                        if "indexer_key_cache" in out_name:
+                            new = f"indexer_key_cache.{layer_idx}_RetainedState"
+                        elif "key" in out_name:
+                            new = f"past_key.{layer_idx}_RetainedState"
+                        elif "value" in out_name:
+                            new = f"past_value.{layer_idx}_RetainedState"
+                        elif "compressed_kv" in out_name:
+                            new = f"compressed_kv.{layer_idx}_RetainedState"
+                        elif "k_pe" in out_name:
+                            new = f"k_pe.{layer_idx}_RetainedState"
                         else:
                             base = out_name[: -len("_InternalRetainedState")]
                             new = orig

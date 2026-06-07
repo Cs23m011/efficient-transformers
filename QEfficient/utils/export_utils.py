@@ -348,7 +348,13 @@ def _setup_onnx_subfunctions(qeff_model, args, kwargs):
             kwargs["output_names"] = [
                 re.sub("_RetainedState", "_InternalRetainedState", name)
                 if name.endswith("_RetainedState")
-                and ("key" in name or "value" in name or "compressed_kv" in name or "k_pe" in name)
+                and (
+                    "key" in name
+                    or "value" in name
+                    or "compressed_kv" in name
+                    or "k_pe" in name
+                    or "indexer_key_cache" in name
+                )
                 else name
                 for name in kwargs["output_names"]
             ]
@@ -357,6 +363,7 @@ def _setup_onnx_subfunctions(qeff_model, args, kwargs):
                 "ONNX subfunctions are enabled, but no retained-state output names were found to rewrite. "
                 "Ensure `output_names` includes key/value retained states if subfunction compatibility is required."
             )
+
 
     # Add subfunction-specific ONNX transforms
     if use_dynamo:

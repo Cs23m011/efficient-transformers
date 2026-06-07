@@ -696,6 +696,7 @@ class QEFFBaseModel(ABC):
             )
         elif specializations:
             kwargs["prefill_seq_len"] = get_attr_or_key(specializations[0], ("cl", "seq_len", "sequence_length"))
+            kwargs["ctx_len"] = get_attr_or_key(specializations[0], ("ctx_len", "context_length"))
 
         # Transform before export
         qaic_config = (
@@ -846,8 +847,14 @@ class QEFFBaseModel(ABC):
         # just below via align_kv_input_names_to_retained_outputs. No-op when kv_cache_prefix is falsy.
         output_name = apply_kv_cache_prefix(output_name, kv_cache_prefix)
         for layer_idx in range(idx, end_idx):
-            output_name.append(f"past_key.{layer_idx}_InternalRetainedState")
-            output_name.append(f"past_value.{layer_idx}_InternalRetainedState")
+            if "compressed_kvs" in example_inputs:
+                output_name.append(f"compressed_kv.{layer_idx}_InternalRetainedState")
+                output_name.append(f"k_pe.{layer_idx}_InternalRetainedState")
+                if "indexer_key_cache" in example_inputs:
+                    output_name.append(f"indexer_key_cache.{layer_idx}_InternalRetainedState")
+            else:
+                output_name.append(f"past_key.{layer_idx}_InternalRetainedState")
+                output_name.append(f"past_value.{layer_idx}_InternalRetainedState")
 
         # For some decoder wrappers (e.g. VLM language wrappers), forward does not accept
         # `inputs_embeds`; keep `input_ids` in those cases.
@@ -1044,6 +1051,13 @@ class QEFFBaseModel(ABC):
         if blocking_config is not None:
             self.model, _ = BlockingAttentionTransform.apply(self.model, attn_blocking_config=blocking_config)
             self.hash_params["blocking_kwargs"] = blocking_config
+
+        if ctx_len is not None and getattr(model_config, "model_type", None) == "glm_moe_dsa":
+            for module in self.model.modules():
+                if module.__class__.__name__ == "QEffGlmMoeDsaAttention":
+                    module.dsa_ctx_len = ctx_len
+                    if hasattr(module, "indexer"):
+                        module.indexer.ctx_len_hint = ctx_len
 
     @dump_qconfig
     def _compile(
