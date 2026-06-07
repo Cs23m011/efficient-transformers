@@ -4807,12 +4807,6 @@ class QEFFAutoModelForCausalLM(QEFFBaseModel):
             and not cache_compressed
         ):
             logger.warning("mla_absorption will be ignored as cache_compressed is set to False")
-        architectures = getattr(self.model.config, "architectures", None) or []
-        if use_onnx_subfunctions and cache_compressed and "GlmMoeDsaForCausalLM" in architectures:
-            logger.warning(
-                "Disabling ONNX subfunctions for GLM-MoE-DSA compressed decode until retained-state naming is fixed."
-            )
-            use_onnx_subfunctions = False
         if (kv_cache_batch_size or full_batch_size) and not self.continuous_batching:
             logger.warning(
                 "`kv_cache_batch_size` or `full_batch_size` is being passed"

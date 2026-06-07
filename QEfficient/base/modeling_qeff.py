@@ -904,8 +904,14 @@ class QEFFBaseModel(ABC):
                 output_name.append(f"past_key.{layer_idx}_InternalRetainedState")
                 output_name.append(f"past_value.{layer_idx}_InternalRetainedState")
         for layer_idx in range(idx, end_idx):
-            output_name.append(f"past_key.{layer_idx}_InternalRetainedState")
-            output_name.append(f"past_value.{layer_idx}_InternalRetainedState")
+            if "compressed_kvs" in example_inputs:
+                output_name.append(f"compressed_kv.{layer_idx}_InternalRetainedState")
+                output_name.append(f"k_pe.{layer_idx}_InternalRetainedState")
+                if "indexer_key_cache" in example_inputs:
+                    output_name.append(f"indexer_key_cache.{layer_idx}_InternalRetainedState")
+            else:
+                output_name.append(f"past_key.{layer_idx}_InternalRetainedState")
+                output_name.append(f"past_value.{layer_idx}_InternalRetainedState")
 
         # For some decoder wrappers (e.g. VLM language wrappers), forward does not accept
         # `inputs_embeds`; keep `input_ids` in those cases.
