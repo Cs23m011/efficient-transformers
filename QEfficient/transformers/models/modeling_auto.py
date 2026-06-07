@@ -3670,6 +3670,7 @@ class QEFFAutoModelForCausalLM(QEFFBaseModel):
                 setattr(self.model, "mla_absorption", mla_absorption)
             if self.model.config.model_type == "glm_moe_dsa":
                 self.hash_params["glm_moe_dsa_export_version"] = 7
+                self.hash_params["glm_moe_dsa_export_version"] = 4
                 dsa_impl = qaic_config.get("dsa_impl")
                 if dsa_impl is not None:
                     self.hash_params["dsa_impl"] = dsa_impl
@@ -4398,6 +4399,7 @@ class QEFFAutoModelForCausalLM(QEFFBaseModel):
                             (
                                 fbs if self.continuous_batching else bs,
                                 cache_example_len,
+                                seq_len,
                                 self.model.config.index_head_dim,
                             ),
                             dtype=self.model.config.torch_dtype,
@@ -4805,6 +4807,12 @@ class QEFFAutoModelForCausalLM(QEFFBaseModel):
             and not cache_compressed
         ):
             logger.warning("mla_absorption will be ignored as cache_compressed is set to False")
+        architectures = getattr(self.model.config, "architectures", None) or []
+        if use_onnx_subfunctions and cache_compressed and "GlmMoeDsaForCausalLM" in architectures:
+            logger.warning(
+                "Disabling ONNX subfunctions for GLM-MoE-DSA compressed decode until retained-state naming is fixed."
+            )
+            use_onnx_subfunctions = False
         if (kv_cache_batch_size or full_batch_size) and not self.continuous_batching:
             logger.warning(
                 "`kv_cache_batch_size` or `full_batch_size` is being passed"

@@ -78,6 +78,7 @@ def CtxScatter3D(data: onnxscript.FLOAT, position_ids: onnxscript.INT32, updates
     batch_idx = ops.Cast(batch_idx, to=onnxscript.INT32.dtype)
 
     batch_idx = ops.Cast(batch_idx, to=onnxscript.INT32.dtype)
+
     ctx_idx = ops.Expand(ops.Unsqueeze(position_ids, [2]), exp_shape)
     ctx_idx = ops.Cast(ctx_idx, to=onnxscript.INT64.dtype)
     indices = ops.Concat(batch_idx, ctx_idx, axis=2)

@@ -65,6 +65,7 @@ class QEffGlmMoeDsaIndexer(GlmMoeDsaIndexer):
             indexer_key_cache = CtxScatterFunc3DGeneralized.apply(
                 indexer_key_cache.clone(), cache_positions, k
             )
+            indexer_key_cache = CtxScatterFunc3DGeneralized.apply(indexer_key_cache, cache_positions, k)
             k_cached = indexer_key_cache
         else:
             if seq_len > 1:
@@ -81,6 +82,7 @@ class QEffGlmMoeDsaIndexer(GlmMoeDsaIndexer):
         index_scores = torch.einsum("bsht,bsh->bst", scores, weights).to(hidden_states.dtype)
 
         if attention_mask is not None:
+        if attention_mask is not None and attention_mask.shape[-1] > 0:
             index_scores = index_scores + attention_mask[..., : index_scores.shape[-1]]
         ctx_indices = torch.arange(index_scores.shape[-1], device=hidden_states.device).view(1, 1, -1)
         future_mask = ctx_indices > position_ids.unsqueeze(-1)
@@ -112,11 +114,13 @@ def _build_dsa_topk_indices(
         # current_position is (batch,); topk_indices is (batch, seq, topk).
         # view(-1, 1, 1) → (batch, 1, 1) via a constant-shape Reshape so rank is unambiguous to QAIC.
         valid_topk = topk_indices.to(position_ids.dtype) <= current_position.view(-1, 1, 1)
+        valid_topk = topk_indices.to(position_ids.dtype) <= current_position.unsqueeze(-1)
         return topk_indices, valid_topk
 
     masked_score = torch.tensor(MIN_MASKED_ATTENTION_VALUE, dtype=index_scores.dtype, device=index_scores.device)
     ctx_len = index_scores.shape[-1]
     block_size = -(-(ctx_len_hint or ctx_len) // num_kv_blocks)
+    block_size = -(-ctx_len // num_kv_blocks)
     candidate_scores = []
     candidate_indices = []
 
@@ -137,6 +141,7 @@ def _build_dsa_topk_indices(
             scores_block = torch.where(skip_future, masked_score, scores_block)
 
         local_k = min(topk, block_size)
+        local_k = min(topk, scores_block.shape[-1])
         local_topk = torch.topk(scores_block, k=local_k, dim=-1)
         candidate_scores.append(local_topk.values)
         candidate_indices.append(local_topk.indices.to(torch.int32) + start_index)
@@ -147,6 +152,7 @@ def _build_dsa_topk_indices(
     final_topk = torch.topk(merged_scores, k=final_k, dim=-1)
     topk_indices = torch.gather(merged_indices, -1, final_topk.indices.to(torch.int64)).to(torch.int32)
     valid_topk = topk_indices.to(position_ids.dtype) <= current_position.view(-1, 1, 1)
+    valid_topk = topk_indices.to(position_ids.dtype) <= current_position.unsqueeze(-1)
     return topk_indices, valid_topk
 
 
@@ -196,6 +202,8 @@ def _dsa_mla_attention_forward(
         pad = split - (topk % split)
         key = F.pad(key, (0, 0, 0, pad), value=0.0)
         ckv_for_v = F.pad(ckv_for_v, (0, 0, 0, pad), value=0.0)
+        key = F.pad(key, (0, 0, 0, pad))
+        ckv_for_v = F.pad(ckv_for_v, (0, 0, 0, pad))
         valid_topk_mask = F.pad(valid_topk_mask, (0, pad), value=0.0)
     topk += pad
 
@@ -212,12 +220,15 @@ def _dsa_mla_attention_forward(
     exp_attn = torch.exp(attn - max_split.unsqueeze(-1))
     exp_attn = torch.where(valid_mask, exp_attn, torch.zeros(1, dtype=exp_attn.dtype, device=exp_attn.device))
     sum_split = torch.einsum("bhsqt->bhsq", exp_attn)
+    sum_split = exp_attn.sum(dim=-1)
     out_split = torch.matmul(exp_attn, value_5d.float())
 
     global_max = max_split.max(dim=2).values
     merge_weight = torch.exp(max_split - global_max.unsqueeze(2))
     denom = torch.einsum("bhsq,bhsq->bhq", merge_weight, sum_split) + 1e-20
     output = torch.einsum("bhsq,bhsqd->bhqd", merge_weight, out_split) / denom.unsqueeze(-1)
+    denom = (merge_weight * sum_split).sum(dim=2) + 1e-20
+    output = (merge_weight.unsqueeze(-1) * out_split).sum(dim=2) / denom.unsqueeze(-1)
     output = output.to(query.dtype)
     output = output.view(batch, num_kv_heads, num_repeats, query_len, kv_lora_rank).reshape(
         batch, num_query_heads, query_len, kv_lora_rank
@@ -263,6 +274,13 @@ class QEffGlmMoeDsaAttention(GlmMoeDsaAttention):
         self.q_up = torch.nn.Parameter(
             q_up.reshape(-1, self.num_heads * self.qk_nope_head_dim).unsqueeze(0).detach()
         )
+        q_up, q_rope = self.q_b_proj.weight.T.view(
+            -1, self.num_heads, self.qk_nope_head_dim + self.qk_rope_head_dim
+        ).split([self.qk_nope_head_dim, self.qk_rope_head_dim], dim=-1)
+        self.q_up = torch.nn.Parameter(q_up.reshape(-1, self.num_heads * self.qk_nope_head_dim).unsqueeze(0).detach())
+        self.q_rope = torch.nn.Parameter(
+            q_rope.reshape(-1, self.num_heads * self.qk_rope_head_dim).unsqueeze(0).detach()
+        )
 
         k_up, v_up = self.kv_b_proj.weight.T.view(-1, self.num_heads, self.qk_nope_head_dim + self.v_head_dim).split(
             [self.qk_nope_head_dim, self.v_head_dim], dim=-1
@@ -301,6 +319,7 @@ class QEffGlmMoeDsaAttention(GlmMoeDsaAttention):
             .unsqueeze(0)
         )
         q_pe = torch.matmul(q_resid, q_rope_w)
+        q_pe = torch.matmul(q_resid, self.q_rope)
         q_pe = q_pe.view(batch_size, seq_len, self.num_heads, self.qk_rope_head_dim).transpose(1, 2)
         cos, sin = position_embeddings
         q_pe = apply_rotary_pos_emb(q_pe, cos, sin, unsqueeze_dim=1)
@@ -385,6 +404,8 @@ class QEffGlmMoeDsaAttention(GlmMoeDsaAttention):
         combined_mask = index_mask.unsqueeze(1)
         if attention_mask is not None:
             combined_mask = combined_mask.masked_fill(attention_mask[..., :total_len], MIN_MASKED_ATTENTION_VALUE)
+        if attention_mask is not None and attention_mask.shape[-1] > 0:
+            combined_mask = combined_mask + attention_mask[..., :total_len]
 
         attn_output, attn_weights = eager_attention_forward(
             self,
@@ -555,6 +576,12 @@ class QEffGlmMoeDsaTopkRouter(GlmMoeDsaTopkRouter):
         router_logits = F.linear(hidden_states.to(torch.float32), self.weight.to(torch.float32))
         router_scores = router_logits.sigmoid()
         scores_for_choice = router_scores + self.e_score_correction_bias.unsqueeze(0).to(router_scores.device)
+class QEffGlmMoeDsaTopkRouter(GlmMoeDsaTopkRouter):
+    def forward(self, hidden_states):
+        hidden_states = hidden_states.view(-1, self.config.hidden_size)
+        router_logits = F.linear(hidden_states, self.weight)
+        router_scores = router_logits.sigmoid()
+        scores_for_choice = router_scores + self.e_score_correction_bias.unsqueeze(0)
         group_scores = torch.einsum(
             "abc->ab",
             scores_for_choice.view(-1, self.n_group, self.n_routed_experts // self.n_group).topk(2, dim=-1)[0],
@@ -614,6 +641,9 @@ class QEffGlmMoeDsaMoE(GlmMoeDsaMoE):
             gate_proj = self.experts.gate_up_proj[:, :mid, :].transpose(1, 2)[topk_indices.flatten()]
             up_proj = self.experts.gate_up_proj[:, mid:, :].transpose(1, 2)[topk_indices.flatten()]
             down_proj = self.experts.down_proj.transpose(1, 2)[topk_indices.flatten()]
+        gate_proj = self.all_gate_proj[topk_indices.flatten()]
+        up_proj = self.all_up_proj[topk_indices.flatten()]
+        down_proj = self.all_down_proj[topk_indices.flatten()]
         expert_in = (
             hidden_states.unsqueeze(1).expand(-1, self.gate.top_k, -1).contiguous().view(-1, 1, self.config.hidden_size)
         )

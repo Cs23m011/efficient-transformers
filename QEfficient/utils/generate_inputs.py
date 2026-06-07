@@ -273,6 +273,11 @@ class InputHandler:
                     pad_shape = self.padding_shape
                 inputs["past_key." + str(i)] = np.zeros((pad_shape), dtype=np.float32)
                 inputs["past_value." + str(i)] = np.zeros((pad_shape), dtype=np.float32)
+                if getattr(self.config, "model_type", None) == "glm_moe_dsa":
+                    inputs["indexer_key_cache." + str(i)] = np.zeros(
+                        (batch_size, self.ctx_len, self.config.index_head_dim), dtype=np.float32
+                    )
+
         if self.full_batch_size:
             inputs["batch_index"] = np.arange(self.full_batch_size).reshape(-1, 1)
         return inputs
@@ -330,6 +335,8 @@ class InputHandler:
 
         outputs = {}
         outputs["past_key_values"] = present_key_values
+        if indexer_key_cache:
+            outputs["indexer_key_cache"] = indexer_key_cache
         outputs["logits"] = ort_outputs["logits"]
 
         return outputs
