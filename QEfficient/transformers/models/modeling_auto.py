@@ -3953,109 +3953,77 @@ class QEFFAutoModelForCausalLM(QEFFBaseModel):
         """
         from torch.export import Dim
 
-        # Create dimension registry to reuse Dim objects with same names
         dim_registry = {}
         dynamic_shapes = {}
 
         max_seq_len = getattr(self.model.config, "max_position_embeddings", 1024)
         batch_min = 1 if getattr(self.model.config, "model_type", None) == "gpt_oss" else 2
-        # Handle regular model inputs (not past_key_values)
-        # These match the QEffLlamaForCausalLM forward signature:
-        # input_ids, attention_mask, position_ids, past_key_values, batch_index, etc.
+
+        def make_dim(dim_name):
+            if dim_name in dim_registry:
+                return dim_registry[dim_name]
+            if dim_name == "batch_size":
+                d = Dim("batch_size", min=batch_min, max=64)
+            elif "seq_len" in dim_name:
+                d = Dim("seq_len", min=2, max=max_seq_len)
+            elif "ctx_len" in dim_name:
+                d = Dim("ctx_len", min=2, max=max_seq_len)
+            elif "sliding_window" in dim_name:
+                d = Dim("sliding_window", min=2, max=getattr(self.model.config, "sliding_window", max_seq_len))
+            else:
+                d = Dim.DYNAMIC
+            dim_registry[dim_name] = d
+            return d
+
+        # Keys that are reconstructed as grouped list arguments — skip in the flat pass.
+        GROUPED_PREFIXES = ("past_key.", "past_value.", "indexer_key_cache.", "compressed_kv.", "k_pe.")
+
+        # Flat inputs: match top-level forward() arg names directly.
         for input_name, axes_map in dynamic_axes.items():
-            if not input_name.startswith("past_"):
-                input_dynamic_shapes = {}
-                for axis_idx, dim_name in axes_map.items():
-                    # Create or reuse Dim object for this dimension name
-                    if dim_name not in dim_registry:
-                        if dim_name == "batch_size":
-                            dim_registry[dim_name] = Dim("batch_size", min=batch_min, max=64)
-                        elif "seq_len" in dim_name:
-                            dim_registry[dim_name] = Dim("seq_len", min=2, max=max_seq_len)
-                        elif "ctx_len" in dim_name:
-                            dim_registry[dim_name] = Dim("ctx_len", min=2, max=max_seq_len)
-                        elif "sliding_window" in dim_name:
-                            dim_registry[dim_name] = Dim(
-                                "sliding_window",
-                                min=2,
-                                max=getattr(self.model.config, "sliding_window", max_seq_len),
-                            )
-                        else:
-                            dim_registry[dim_name] = Dim.DYNAMIC
+            if not any(input_name.startswith(p) for p in GROUPED_PREFIXES):
+                dynamic_shapes[input_name] = {axis_idx: make_dim(dim_name) for axis_idx, dim_name in axes_map.items()}
 
-                    input_dynamic_shapes[axis_idx] = dim_registry[dim_name]
-
-                dynamic_shapes[input_name] = input_dynamic_shapes
-
-        # Handle past_key_values specially - collect all past_key.X and past_value.X
-        past_keys = {}
-        past_values = {}
-
+        # past_key_values: reconstruct as [[key_0, val_0], [key_1, val_1], ...]
+        past_keys: Dict[int, Dict] = {}
+        past_values: Dict[int, Dict] = {}
         for input_name, axes_map in dynamic_axes.items():
             if input_name.startswith("past_key."):
                 layer_idx = int(input_name.split(".")[1])
-                layer_dynamic_shapes = {}
-                for axis_idx, dim_name in axes_map.items():
-                    if dim_name not in dim_registry:
-                        if dim_name == "batch_size":
-                            dim_registry[dim_name] = Dim("batch_size", min=batch_min, max=64)
-                        elif "seq_len" in dim_name:
-                            dim_registry[dim_name] = Dim("seq_len", min=2, max=max_seq_len)
-                        elif "ctx_len" in dim_name:
-                            dim_registry[dim_name] = Dim("ctx_len", min=2, max=max_seq_len)
-                        elif "sliding_window" in dim_name:
-                            dim_registry[dim_name] = Dim(
-                                "sliding_window",
-                                min=2,
-                                max=getattr(self.model.config, "sliding_window", max_seq_len),
-                            )
-                        else:
-                            dim_registry[dim_name] = Dim.DYNAMIC
-                    layer_dynamic_shapes[axis_idx] = dim_registry[dim_name]
-                past_keys[layer_idx] = layer_dynamic_shapes
-
+                past_keys[layer_idx] = {axis_idx: make_dim(dim_name) for axis_idx, dim_name in axes_map.items()}
             elif input_name.startswith("past_value."):
                 layer_idx = int(input_name.split(".")[1])
-                layer_dynamic_shapes = {}
-                for axis_idx, dim_name in axes_map.items():
-                    if dim_name not in dim_registry:
-                        if dim_name == "batch_size":
-                            dim_registry[dim_name] = Dim("batch_size", min=batch_min, max=64)
-                        elif "seq_len" in dim_name:
-                            dim_registry[dim_name] = Dim("seq_len", min=2, max=max_seq_len)
-                        elif "ctx_len" in dim_name:
-                            dim_registry[dim_name] = Dim("ctx_len", min=2, max=max_seq_len)
-                        elif "sliding_window" in dim_name:
-                            dim_registry[dim_name] = Dim(
-                                "sliding_window",
-                                min=2,
-                                max=getattr(self.model.config, "sliding_window", max_seq_len),
-                            )
-                        else:
-                            dim_registry[dim_name] = Dim.DYNAMIC
-                    layer_dynamic_shapes[axis_idx] = dim_registry[dim_name]
-                past_values[layer_idx] = layer_dynamic_shapes
-
-        # Reconstruct past_key_values as nested structure if we have past keys/values
+                past_values[layer_idx] = {axis_idx: make_dim(dim_name) for axis_idx, dim_name in axes_map.items()}
         if past_keys or past_values:
             max_layer = max(list(past_keys.keys()) + list(past_values.keys()))
-            past_kv_shapes = []
+            dynamic_shapes["past_key_values"] = [
+                [past_keys.get(i, {}), past_values.get(i, {})] for i in range(max_layer + 1)
+            ]
 
-            for layer_idx in range(max_layer + 1):
-                layer_shapes = []
-                if layer_idx in past_keys:
-                    layer_shapes.append(past_keys[layer_idx])
-                else:
-                    layer_shapes.append({})
+        # indexer_key_cache: reconstruct as [shape_0, shape_1, ...] (flat list, one entry per slot)
+        indexer_cache: Dict[int, Dict] = {}
+        for input_name, axes_map in dynamic_axes.items():
+            if input_name.startswith("indexer_key_cache."):
+                idx = int(input_name.split(".")[1])
+                indexer_cache[idx] = {axis_idx: make_dim(dim_name) for axis_idx, dim_name in axes_map.items()}
+        if indexer_cache:
+            max_idx = max(indexer_cache.keys())
+            dynamic_shapes["indexer_key_cache"] = [indexer_cache.get(i, {}) for i in range(max_idx + 1)]
 
-                if layer_idx in past_values:
-                    layer_shapes.append(past_values[layer_idx])
-                else:
-                    layer_shapes.append({})
-
-                past_kv_shapes.append(layer_shapes)
-
-            dynamic_shapes["past_key_values"] = past_kv_shapes
+        # compressed_kvs: reconstruct as [[ckv_0, k_pe_0], [ckv_1, k_pe_1], ...]
+        compressed_kv_shapes: Dict[int, Dict] = {}
+        k_pe_shapes: Dict[int, Dict] = {}
+        for input_name, axes_map in dynamic_axes.items():
+            if input_name.startswith("compressed_kv."):
+                idx = int(input_name.split(".")[1])
+                compressed_kv_shapes[idx] = {axis_idx: make_dim(dim_name) for axis_idx, dim_name in axes_map.items()}
+            elif input_name.startswith("k_pe."):
+                idx = int(input_name.split(".")[1])
+                k_pe_shapes[idx] = {axis_idx: make_dim(dim_name) for axis_idx, dim_name in axes_map.items()}
+        if compressed_kv_shapes or k_pe_shapes:
+            max_idx = max(list(compressed_kv_shapes.keys()) + list(k_pe_shapes.keys()))
+            dynamic_shapes["compressed_kvs"] = [
+                [compressed_kv_shapes.get(i, {}), k_pe_shapes.get(i, {})] for i in range(max_idx + 1)
+            ]
 
         return dynamic_shapes
 

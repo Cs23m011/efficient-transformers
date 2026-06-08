@@ -52,6 +52,10 @@ class CtxScatterFunc(torch.autograd.Function):
         pass
 
     @staticmethod
+    def backward(ctx, grad_output):
+        return None, None, None
+
+    @staticmethod
     def symbolic(g: torch.Graph, data: torch.Value, position_ids: torch.Value, updates: torch.Value) -> torch.Value:
         return g.onnxscript_op(CtxScatter, data, position_ids, updates).setTypeAs(data)
 
@@ -94,6 +98,10 @@ class CtxScatterFunc3D(torch.autograd.Function):
         pass
 
     @staticmethod
+    def backward(ctx, grad_output):
+        return None, None, None
+
+    @staticmethod
     def symbolic(g: torch.Graph, data: torch.Value, position_ids: torch.Value, updates: torch.Value) -> torch.Value:
         return g.onnxscript_op(CtxScatter3D, data, position_ids, updates).setTypeAs(data)
 
@@ -111,14 +119,25 @@ class CtxScatterFunc3DGeneralized(torch.autograd.Function):
     @staticmethod
     def forward(data: torch.Tensor, position_ids: torch.Tensor, updates: torch.Tensor):
         data = data.clone()
-        valid = position_ids != torch.iinfo(torch.int32).max
+        valid = position_ids != torch.iinfo(torch.int32).max  # (batch, seq)
+        # Clamp invalid sentinel values to a safe index so no out-of-bounds access occurs.
+        safe_pos = position_ids.long().clamp(0, data.shape[1] - 1)  # (batch, seq)
         batch_idx = torch.arange(data.shape[0], device=data.device).view(-1, 1).expand_as(position_ids)
-        data[batch_idx[valid], position_ids[valid].long()] = updates[valid]
+        current = data[batch_idx, safe_pos]  # gather values at scatter destinations
+        # Use unsqueeze (constant-axis ONNX op) instead of reshape (non-constant shape tensor).
+        v = valid
+        for _ in range(updates.dim() - valid.dim()):
+            v = v.unsqueeze(-1)
+        data[batch_idx, safe_pos] = torch.where(v, updates, current)
         return data
 
     @staticmethod
     def setup_context(ctx, inputs, outputs):
         pass
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return None, None, None
 
     @staticmethod
     def symbolic(g: torch.Graph, data: torch.Value, position_ids: torch.Value, updates: torch.Value) -> torch.Value:
@@ -154,14 +173,23 @@ class CtxScatterFunc3DInt(torch.autograd.Function):
     @staticmethod
     def forward(data: torch.Tensor, position_ids: torch.Tensor, updates: torch.Tensor):
         data = data.clone()
-        valid = position_ids != torch.iinfo(torch.int32).max
+        valid = position_ids != torch.iinfo(torch.int32).max  # (batch, seq)
+        safe_pos = position_ids.long().clamp(0, data.shape[1] - 1)
         batch_idx = torch.arange(data.shape[0], device=data.device).view(-1, 1).expand_as(position_ids)
-        data[batch_idx[valid], position_ids[valid].long()] = updates[valid]
+        current = data[batch_idx, safe_pos]
+        v = valid
+        for _ in range(updates.dim() - valid.dim()):
+            v = v.unsqueeze(-1)
+        data[batch_idx, safe_pos] = torch.where(v, updates, current)
         return data
 
     @staticmethod
     def setup_context(ctx, inputs, outputs):
         pass
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return None, None, None
 
     @staticmethod
     def symbolic(g: torch.Graph, data: torch.Value, position_ids: torch.Value, updates: torch.Value) -> torch.Value:
@@ -188,6 +216,10 @@ class CtxGatherFunc3D(torch.autograd.Function):
     @staticmethod
     def setup_context(ctx, inputs, outputs):
         pass
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return None, None
 
     @staticmethod
     def symbolic(g: torch.Graph, data: torch.Value, ctx_indices: torch.Value) -> torch.Value:
@@ -219,6 +251,10 @@ class CtxGatherFunc3DGeneralized(torch.autograd.Function):
     @staticmethod
     def setup_context(ctx, inputs, outputs):
         pass
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return None, None
 
     @staticmethod
     def symbolic(g: torch.Graph, data: torch.Value, ctx_indices: torch.Value) -> torch.Value:
@@ -255,6 +291,10 @@ class CtxGatherFunc(torch.autograd.Function):
         pass
 
     @staticmethod
+    def backward(ctx, grad_output):
+        return None, None, None
+
+    @staticmethod
     def symbolic(g: torch.Graph, data: torch.Value, ctx_indices: torch.Value, comp_ctx_len: int) -> torch.Value:
         return g.onnxscript_op(CtxGather, data, ctx_indices, comp_ctx_len).setTypeAs(data)
 
@@ -280,6 +320,10 @@ class CtxGatherFuncBlockedKV(torch.autograd.Function):
     @staticmethod
     def setup_context(ctx, inputs, outputs):
         pass
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return None, None
 
     @staticmethod
     def symbolic(g: torch.Graph, data: torch.Value, ctx_indices: torch.Value) -> torch.Value:

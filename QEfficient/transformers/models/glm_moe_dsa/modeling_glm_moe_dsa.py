@@ -102,7 +102,9 @@ def _build_dsa_topk_indices(
     current_position = position_ids.max(dim=-1).values
     if not blocked_indexer or num_kv_blocks <= 1:
         topk_indices = torch.topk(index_scores, k=topk, dim=-1).indices.to(torch.int32)
-        valid_topk = topk_indices.to(position_ids.dtype) <= current_position.unsqueeze(-1)
+        # current_position is (batch,); topk_indices is (batch, seq, topk).
+        # view(-1, 1, 1) → (batch, 1, 1) via a constant-shape Reshape so rank is unambiguous to QAIC.
+        valid_topk = topk_indices.to(position_ids.dtype) <= current_position.view(-1, 1, 1)
         return topk_indices, valid_topk
 
     masked_score = torch.tensor(MIN_MASKED_ATTENTION_VALUE, dtype=index_scores.dtype, device=index_scores.device)
@@ -137,7 +139,7 @@ def _build_dsa_topk_indices(
     final_k = min(topk, merged_scores.shape[-1])
     final_topk = torch.topk(merged_scores, k=final_k, dim=-1)
     topk_indices = torch.gather(merged_indices, -1, final_topk.indices.to(torch.int64)).to(torch.int32)
-    valid_topk = topk_indices.to(position_ids.dtype) <= current_position.unsqueeze(-1)
+    valid_topk = topk_indices.to(position_ids.dtype) <= current_position.view(-1, 1, 1)
     return topk_indices, valid_topk
 
 
