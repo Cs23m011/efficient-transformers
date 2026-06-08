@@ -83,7 +83,11 @@ def _(
     ctx_indices: torch.Tensor,
     comp_ctx_len: int,
 ) -> torch.Tensor:
-    return torch.empty_like(data)
+    # Output shape: [batch, heads, ctx_len, head_dim] where ctx_len = ctx_indices.shape[-1]
+    batch, heads = data.shape[0], data.shape[1]
+    head_dim = data.shape[-1]
+    ctx_len_out = ctx_indices.shape[-1]
+    return torch.empty(batch, heads, ctx_len_out, head_dim, dtype=data.dtype, device=data.device)
 
 
 # SCATTER CB (4D with heads, context, etc.)

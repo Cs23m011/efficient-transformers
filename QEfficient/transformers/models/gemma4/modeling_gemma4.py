@@ -95,6 +95,7 @@ def _build_additive_attention_mask(
         sliding_window=sliding_window,
     )
     return causal_mask.to(dtype=dtype) * _attention_mask_min(dtype, causal_mask.device)
+    return causal_mask.to(dtype=dtype) * torch.finfo(dtype).min
 
 
 def _build_bidirectional_vision_attention_mask(
@@ -116,6 +117,7 @@ def _build_bidirectional_vision_attention_mask(
     )
     if mm_token_type_ids is None:
         return base_mask.to(dtype=dtype) * _attention_mask_min(dtype, base_mask.device)
+        return base_mask.to(dtype=dtype) * torch.finfo(dtype).min
 
     is_vision = (mm_token_type_ids == 1) | (mm_token_type_ids == 2)
     is_prev_vision = torch.roll(is_vision, shifts=1, dims=-1)
@@ -191,6 +193,7 @@ def apply_multidimensional_rope(
         unsqueeze_dim=unsqueeze_dim,
     )
     return y_grouped.reshape(*x.shape[:-1], total_rotated_channels)
+    return attention_mask.to(dtype=dtype) * torch.finfo(dtype).min
 
 
 class QEffGemma4TextRouter(Gemma4TextRouter):
@@ -454,11 +457,15 @@ class QEffGemma4TextAttention(Gemma4TextAttention):
                         cache_kwargs,
                     )
             else:
+
+        if past_key_values is not None:
+            if not self.is_kv_shared_layer:
                 key_states, value_states = past_key_values.update(
                     key_states,
                     value_states,
                     self.layer_idx,
                     cache_kwargs,
+                    {"position_ids": position_ids},
                 )
             if self.store_full_length_kv:
                 if not hasattr(past_key_values, "shared_layers"):
@@ -468,6 +475,7 @@ class QEffGemma4TextAttention(Gemma4TextAttention):
                 past_key_values.shared_layers[self.layer_idx] = key_states, value_states
                 if token_key_states is not None and token_value_states is not None:
                     past_key_values.shared_layers_token[self.layer_idx] = token_key_states, token_value_states
+                past_key_values.shared_layers[self.layer_idx] = key_states, value_states
 
         if mm_token_type_ids is not None and hidden_states.shape[1] != 1:
             attention_mask = _build_bidirectional_vision_attention_mask(
@@ -998,6 +1006,7 @@ class QEffGemma4DecoderWrapper(nn.Module):
         **kwargs,
     ):
         del kwargs
+        del batch_index, comp_ctx_lengths, kwargs
         if past_key_values is not None and not isinstance(past_key_values, Cache):
             past_key_values = QEffGemma4DynamicCache.from_legacy_cache(self.language_model.config, past_key_values)
 
@@ -1084,6 +1093,7 @@ class QEffGemma4EncoderWrapper(nn.Module):
 
         valid_tokens = ~padding_positions
         vision_attention_mask = (~valid_tokens).unsqueeze(1).unsqueeze(2).to(dtype=inputs_embeds.dtype)
+        vision_attention_mask = vision_attention_mask * torch.finfo(inputs_embeds.dtype).min
         vision_attention_mask = vision_attention_mask.expand(-1, 1, inputs_embeds.shape[1], -1)
 
         hidden_states = inputs_embeds

@@ -283,7 +283,7 @@ def export_weight_free_onnx(
 
     meta_example_inputs = _to_meta(example_inputs)
     model_ref = meta_qeff_model.hash_params["pretrained_model_name_or_path"]
-
+    meta_qeff_model.model.requires_grad_(False)
     with export_context:
         onnx_program = torch.onnx.export(
             meta_qeff_model.model,

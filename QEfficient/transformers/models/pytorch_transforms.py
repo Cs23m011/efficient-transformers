@@ -426,8 +426,10 @@ from QEfficient.transformers.models.gpt_oss.modeling_gpt_oss import (
     QEffGptOssDecoderLayer,
     QEffGptOssExperts,
     QEffGptOssForCausalLM,
+    QEffGptOssFullDecoderLayer,
     QEffGptOssMLP,
     QEffGptOssModel,
+    QEffGptOssSlidingDecoderLayer,
     QEffPrefillOnlyChunkedGptOssAttention,
     QEffPrefillOnlyChunkedGptOssMLP,
     QEffPrefillOnlyGptOssAttention,
@@ -1407,7 +1409,7 @@ def get_decoder_layer_classes_for_export(model: nn.Module) -> set:
     """
     # Define patterns that identify decoder layer classes
     DECODER_LAYER_PATTERNS = ["DecoderLayer", "Block", "Layer"]
-
+    
     # Get all QEff classes that are decoder layers from the existing mapping
     decoder_layer_classes = set()
 
@@ -1417,10 +1419,14 @@ def get_decoder_layer_classes_for_export(model: nn.Module) -> set:
         if any(pattern in qeff_class_name for pattern in DECODER_LAYER_PATTERNS):
             decoder_layer_classes.add(qeff_class)
 
-    # Filter to only include classes that are actually used in the current model
+    # Filter to only include classes that are actually used in the current model.
+    # Use isinstance so that marker subclasses (e.g. QEffGptOssSlidingDecoderLayer)
+    # are recognised as decoder layers even though only their base class appears in
+    # the mapping; the actual runtime class is added to the result set.
+    decoder_layer_bases = tuple(decoder_layer_classes)
     model_decoder_classes = set()
     for module in model.modules():
-        if module.__class__ in decoder_layer_classes:
+        if isinstance(module, decoder_layer_bases):
             model_decoder_classes.add(module.__class__)
 
     return model_decoder_classes

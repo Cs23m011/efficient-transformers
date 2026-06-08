@@ -483,7 +483,7 @@ class QEffDynamicCompressedKVRopeLayer:
 
         ckv_out = self.ckv
         ctx_len = ckv_out.shape[-2]
-        ctx_indices = torch.arange(ctx_len)[None, ...]
+        ctx_indices = torch.arange(ctx_len, device=position_ids.device)[None, ...]
         gather_limit = position_ids.max(1, keepdim=True).values
         invalid_mask = ctx_indices > gather_limit
         if torch.onnx.is_in_onnx_export():
@@ -507,7 +507,7 @@ class QEffDynamicCompressedKVRopeLayer:
 
         k_pe_out = self.k_pe
         ctx_len = k_pe_out.shape[-2]
-        ctx_indices = torch.arange(ctx_len)[None, ...]
+        ctx_indices = torch.arange(ctx_len, device=position_ids.device)[None, ...]
         gather_limit = position_ids.max(1, keepdim=True).values
         invalid_mask = ctx_indices > gather_limit
         if torch.onnx.is_in_onnx_export():
@@ -529,7 +529,7 @@ class QEffDynamicCompressedKVRopeLayer:
         ckv_out = self.ckv
         position_ids = cache_kwargs.get("position_ids")
         batch, num_kv_heads, _, _ = ckv_out.shape
-        ctx_indices = torch.arange(start=start_index, end=end_index)[None, None, ...]
+        ctx_indices = torch.arange(start=start_index, end=end_index, device=position_ids.device)[None, None, ...]
         gather_limit = position_ids.max(1, keepdim=True).values.unsqueeze(1)
         invalid_mask = ctx_indices > gather_limit
 
@@ -555,7 +555,7 @@ class QEffDynamicCompressedKVRopeLayer:
         k_pe_out = self.k_pe
         position_ids = cache_kwargs.get("position_ids")
         batch, num_kv_heads, _, _ = k_pe_out.shape
-        ctx_indices = torch.arange(start=start_index, end=end_index)[None, None, ...]
+        ctx_indices = torch.arange(start=start_index, end=end_index, device=position_ids.device)[None, None, ...]
         gather_limit = position_ids.max(1, keepdim=True).values.unsqueeze(1)
         invalid_mask = ctx_indices > gather_limit
 
@@ -922,13 +922,13 @@ class QEffHybridCache(HybridCache):
 
             # Original Gather
             ctx_len = cache_kwargs.get("CCL", self.key_cache[layer_idx].shape[2])
-            ctx_indices = torch.arange(ctx_len)[None, None, ...]
+            ctx_indices = torch.arange(ctx_len, device=kv_position_ids.device)[None, None, ...]
             gather_limit = kv_position_ids.max(1, keepdim=True).values.unsqueeze(1)
             invalid_mask = ctx_indices > gather_limit
             invalid_idx_value = InvalidIndexProvider._get_invalid_idx_value()
             ctx_indices = torch.where(invalid_mask, invalid_idx_value, ctx_indices)
 
-            all_indices = torch.arange(layer_ctx_len) + kv_position_ids.max() + 1
+            all_indices = torch.arange(layer_ctx_len, device=kv_position_ids.device) + kv_position_ids.max() + 1
             rolling_indices = torch.where(
                 all_indices > layer_ctx_len - 1,
                 _remainder_with_symbolic_divisor(all_indices, layer_ctx_len),
@@ -1047,7 +1047,7 @@ class QEffHybridChunkedCache(HybridChunkedCache):
             # Original Gather
             ctx_len = cache_kwargs.get("CCL", k_out.shape[2])
             ctx_len = min(layer_ctx_len, ctx_len)
-            ctx_indices = torch.arange(ctx_len)[None, None, ...]
+            ctx_indices = torch.arange(ctx_len, device=kv_position_ids.device)[None, None, ...]
             gather_limit = kv_position_ids.max(1, keepdim=True).values.unsqueeze(1)
             invalid_mask = ctx_indices > gather_limit
             if torch.onnx.is_in_onnx_export():
@@ -1057,7 +1057,7 @@ class QEffHybridChunkedCache(HybridChunkedCache):
             ctx_indices = torch.where(invalid_mask, invalid_idx_value, ctx_indices)
 
             # Rolling indices for sliding window
-            all_indices = torch.arange(layer_ctx_len) + kv_position_ids.max() + 1
+            all_indices = torch.arange(layer_ctx_len, device=kv_position_ids.device) + kv_position_ids.max() + 1
             rolling_indices = torch.where(
                 all_indices > layer_ctx_len - 1,
                 _remainder_with_symbolic_divisor(all_indices, layer_ctx_len),
@@ -1219,6 +1219,7 @@ class QEffSlidingWindowCache:
 
             gather_limit = position_ids.max(1, keepdim=True).values.unsqueeze(1)
             ctx_indices = torch.arange(ctx_len, device=gather_limit.device)[None, None, ...]
+
             invalid_mask = ctx_indices > gather_limit
             if torch.onnx.is_in_onnx_export():
                 invalid_idx_value = torch.iinfo(torch.int32).max
@@ -1251,16 +1252,28 @@ class QEffHybridCacheForGPTOSS:
     ) -> "HybridCache":
         """Converts a cache in the legacy cache format into an equivalent `DynamicCache`. Used for
         backward compatibility."""
+        # Use config.sliding_window (a concrete int) instead of past_key_values[0][0].shape[2]
+        # (which may be symbolic during torch.export tracing, causing sliding_window_len to
+        # become a SymInt attribute that gets lifted as a standalone operand to invoke_subgraph,
+        # creating a 27-vs-26 operand-count mismatch between the prefill and decode traces).
         cache = cls(
             config,
             batch_size=past_key_values[0][0].shape[0],
             max_cache_len=past_key_values[1][0].shape[2],
-            sliding_window_len=past_key_values[0][0].shape[2],
+            sliding_window_len=config.sliding_window,
         )
         if past_key_values is not None:
+            layer_types = getattr(config, "layer_types", None) or []
             for layer_idx in range(len(past_key_values)):
                 key_states, value_states = past_key_values[layer_idx]
-                cache.update(key_states, value_states, layer_idx)
+                lt = layer_types[layer_idx] if layer_idx < len(layer_types) else "full_attention"
+                # Pass is_sliding so update() uses self.sliding_window_len (concrete) for the
+                # gather ctx_len rather than key_cache[layer_idx].shape[2] (symbolic).  Without
+                # this, the symbolic system equates the sliding-window cache's symbolic dim with
+                # the concrete 128 used in the decoder forward, then propagates that constraint
+                # to the full-attention cache's dimension (32), causing "32 not in VR[128,128]".
+                cache_init_kwargs = {"is_sliding": lt == "sliding_attention"}
+                cache.update(key_states, value_states, layer_idx, cache_init_kwargs)
         return cache
 
     def __len__(self):
@@ -1308,7 +1321,7 @@ class QEffHybridCacheForGPTOSS:
 
             if is_sliding_layer:
                 # prefill only mode we slice the passed key states to sliding window len and need to adjust kv_position_ids accordingly
-                kv_position_ids = torch.arange(ctx_len, dtype=torch.int64).reshape(1, -1)
+                kv_position_ids = torch.arange(ctx_len, dtype=torch.int64, device=position_ids.device).reshape(1, -1)
             else:
                 kv_position_ids = position_ids
 
@@ -1343,7 +1356,7 @@ class QEffHybridCacheForGPTOSS:
 
         batch, num_kv_heads, _, _ = k_out.shape
 
-        ctx_indices = torch.arange(start=start_idx, end=end_idx)[None, None, ...]
+        ctx_indices = torch.arange(start=start_idx, end=end_idx, device=position_ids.device)[None, None, ...]
         gather_limit = position_ids.max(1, keepdim=True).values.unsqueeze(1)
         invalid_mask = ctx_indices > gather_limit
         if torch.onnx.is_in_onnx_export():
@@ -1422,12 +1435,19 @@ class QEffHybridCacheForGPTOSS:
 
             # Original Gather
             if is_sliding_layer:
+                # Use the actual cache size, not self.sliding_window_len, so that
+                # the gather length matches the pre-allocated KV buffer.  When the
+                # export sample input has ctx_len < sliding_window_len (e.g. 32 < 128
+                # in unit-tests), using the config sliding_window_len would try to
+                # gather more items than exist in the cache, creating an impossible
+                # symbolic constraint.
                 ctx_len = self.key_cache[layer_idx].shape[2]
             else:
                 ctx_len = cache_kwargs.get("CCL", self.key_cache[layer_idx].shape[2])
 
             gather_limit = position_ids.max(1, keepdim=True).values.unsqueeze(1)
             ctx_indices = torch.arange(ctx_len, device=gather_limit.device)[None, None, ...]
+
             invalid_mask = ctx_indices > gather_limit
             if torch.onnx.is_in_onnx_export():
                 invalid_idx_value = torch.iinfo(torch.int32).max
@@ -1482,7 +1502,7 @@ class QEffHybridCacheForGPTOSS:
 
         # Gather
         ctx_len = cache_kwargs.get("CCL", k_out.shape[2])
-        ctx_indices = torch.arange(ctx_len)[None, None, ...]
+        ctx_indices = torch.arange(ctx_len, device=position_ids.device)[None, None, ...]
         gather_limit = position_ids.max(1, keepdim=True).values.unsqueeze(1)
         invalid_mask = ctx_indices > gather_limit
         ctx_indices = torch.where(invalid_mask, invalid_idx_value, ctx_indices)
@@ -1524,14 +1544,21 @@ class QEffHybridCacheForGPTOSS:
         sliding_window_len = cache_kwargs.get("sliding_window")
 
         # Gather
-        ctx_len = position_ids.shape[1] + sliding_window_len
-        ctx_indices = torch.arange(ctx_len)[None, None, ...]
+        # ctx_len is derived from ctx_indices.shape[-1] after building ctx_indices, so that
+        # the proxy tensor tracer does not lift it as a standalone free SymInt operand.
+        # Using position_ids.shape[1] + sliding_window_len directly as ctx_len creates a
+        # new SymInt (s0 + sw) in the prefill trace but a plain int in the decode trace,
+        # causing an operand-count mismatch when the subfunction graph is cached across calls.
+        ctx_indices = torch.arange(
+            position_ids.shape[1] + sliding_window_len, device=position_ids.device
+        )[None, None, ...]
         first_pos_idx = position_ids[0][0]
         add_idx = torch.where(first_pos_idx >= sliding_window_len, first_pos_idx - sliding_window_len, 0)
         ctx_indices += add_idx
         gather_limit = position_ids.max(1, keepdim=True).values.unsqueeze(1)
         invalid_mask = ctx_indices > gather_limit
         ctx_indices = torch.where(invalid_mask, invalid_idx_value, ctx_indices)
+        ctx_len = ctx_indices.shape[-1]
         if batch_index is not None:
             k_out = CtxGatherFuncCB.apply(k_out, batch_index, ctx_indices, ctx_len)
             v_out = CtxGatherFuncCB.apply(v_out, batch_index, ctx_indices, ctx_len)

@@ -203,6 +203,8 @@ class SplitGateUpWeightsTransform(PytorchTransform):
 
             # ---- split weights based on model type ----------------------
             fused = sd[fused_key]  # [E, H, 2I]
+            if fused.is_meta:
+                continue
             E, H, two_I = fused.shape
 
             if is_gpt_oss:
