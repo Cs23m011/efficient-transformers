@@ -548,7 +548,11 @@ class QEffGlmMoeDsaSparseDecoderLayer(QEffGlmMoeDsaDecoderLayer):
 class QEffGlmMoeDsaTopkRouter(GlmMoeDsaTopkRouter):
     def forward(self, hidden_states):
         hidden_states = hidden_states.view(-1, self.config.hidden_size)
-        router_logits = F.linear(hidden_states, self.weight)
+        # Cast to float32 to match HF base class (GlmMoeDsaTopkRouter.forward uses
+        # hidden_states.type(float32) and self.weight.type(float32)).  Without this,
+        # router logits are computed in the activation dtype and small numerical
+        # differences change which experts are selected, causing HF ≠ QEff divergence.
+        router_logits = F.linear(hidden_states.to(torch.float32), self.weight.to(torch.float32))
         router_scores = router_logits.sigmoid()
         scores_for_choice = router_scores + self.e_score_correction_bias.unsqueeze(0).to(router_scores.device)
         group_scores = torch.einsum(
