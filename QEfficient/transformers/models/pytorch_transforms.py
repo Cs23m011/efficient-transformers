@@ -402,13 +402,11 @@ from QEfficient.transformers.models.glm4_moe.modeling_glm4_moe import (
 from QEfficient.transformers.models.glm_moe_dsa.modeling_glm_moe_dsa import (
     QEffGlmMoeDsaAttention,
     QEffGlmMoeDsaDecoderLayer,
-    QEffGlmMoeDsaDenseDecoderLayer,
     QEffGlmMoeDsaForCausalLM,
     QEffGlmMoeDsaIndexer,
     QEffGlmMoeDsaModel,
     QEffGlmMoeDsaMoE,
     QEffGlmMoeDsaRotaryEmbedding,
-    QEffGlmMoeDsaSparseDecoderLayer,
     QEffGlmMoeDsaTopkRouter,
 )
 from QEfficient.transformers.models.gpt2.modeling_gpt2 import (

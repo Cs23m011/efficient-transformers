@@ -741,7 +741,7 @@ class QEffGlmMoeDsaModel(GlmMoeDsaModel):
 
 class QEffGlmMoeDsaForCausalLM(GlmMoeDsaForCausalLM):
     def get_submodules_for_export(self) -> Type[nn.Module]:
-        return {QEffGlmMoeDsaDenseDecoderLayer, QEffGlmMoeDsaSparseDecoderLayer}
+        return {QEffGlmMoeDsaDecoderLayer}
 
     def forward(
         self,
