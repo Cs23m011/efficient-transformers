@@ -180,6 +180,7 @@ class QEFFBaseModel(ABC):
             logger.warning("BFloat16 dtype is not yet supported; converting to float16 precision!")
             target_dtype = torch.float16
         self.model = self.model.to(dtype=target_dtype)
+        self.config.torch_dtype = target_dtype  # keep config in sync with actual model dtype
 
 
     def _normalize_torch_dtype(self):

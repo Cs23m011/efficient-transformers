@@ -43,6 +43,16 @@ class InputHandler:
         self.ctx_len = ctx_len
         self.full_batch_size = full_batch_size
         self.config = config
+        # Use config dtype if caller didn't override; bfloat16 → float16 to match QEff model conversion.
+        if dtype == torch.float32:
+            cfg_dtype = getattr(config, "torch_dtype", None) or getattr(config, "dtype", None)
+            if isinstance(cfg_dtype, str):
+                _map = {"float16": torch.float16, "bfloat16": torch.float16, "float32": torch.float32}
+                cfg_dtype = _map.get(cfg_dtype)
+            elif cfg_dtype == torch.bfloat16:
+                cfg_dtype = torch.float16
+            if cfg_dtype is not None:
+                dtype = cfg_dtype
         self.dtype = dtype
         self.n_layer = get_num_layers_from_config(config)
         self.padding_shape = get_padding_shape_from_config(
@@ -143,6 +153,8 @@ class InputHandler:
                 and self.config.layer_types[i] == "sliding_attention"
             ):
                 pad_shape = self.padding_shape[:2] + [self.config.sliding_window] + [self.padding_shape[-1]]
+            elif getattr(self.config, "model_type", None) == "glm_moe_dsa":
+                pad_shape = self._get_layer_cache_shape(i)
             else:
                 pad_shape = self.padding_shape
             past_key = torch.zeros((pad_shape), dtype=self.dtype)

@@ -57,7 +57,14 @@ class QEffGlmMoeDsaIndexer(GlmMoeDsaIndexer):
         if indexer_key_cache is not None:
             invalid_scatter_index = torch.iinfo(torch.int32).max
             cache_positions = torch.where(position_ids < 0, invalid_scatter_index, position_ids).to(torch.int32)
-            indexer_key_cache = CtxScatterFunc3DGeneralized.apply(indexer_key_cache, cache_positions, k)
+            # Clone indexer_key_cache before scatter so that the function's output
+            # (which it returns in-place) has new independent storage.  Without the
+            # clone, the returned tensor has the same storage as the input
+            # indexer_key_cache argument → input-to-output aliasing detected by
+            # invoke_subgraph's check_aliasing_and_input_mutation → export failure.
+            indexer_key_cache = CtxScatterFunc3DGeneralized.apply(
+                indexer_key_cache.clone(), cache_positions, k
+            )
             k_cached = indexer_key_cache
         else:
             if seq_len > 1:
@@ -73,7 +80,7 @@ class QEffGlmMoeDsaIndexer(GlmMoeDsaIndexer):
         scores = F.relu(scores)
         index_scores = torch.einsum("bsht,bsh->bst", scores, weights).to(hidden_states.dtype)
 
-        if attention_mask is not None and attention_mask.shape[-1] > 0:
+        if attention_mask is not None:
             index_scores = index_scores + attention_mask[..., : index_scores.shape[-1]]
         ctx_indices = torch.arange(index_scores.shape[-1], device=hidden_states.device).view(1, 1, -1)
         future_mask = ctx_indices > position_ids.unsqueeze(-1)
@@ -239,12 +246,22 @@ def _ensure_compressed_cache_layer(
 
 class QEffGlmMoeDsaAttention(GlmMoeDsaAttention):
     def __qeff_init__(self):
+        # Skip all derived parameter creation on meta device (weight-free export).
+        # q_rope is not in the original checkpoint so it cannot be promoted to a
+        # weight-spec entry; leaving it as an ONNX initializer would fail at save
+        # time with "Cannot copy out of meta tensor".  The forward computes it
+        # inline from q_b_proj.weight (which IS in the checkpoint) instead.
+        if self.q_b_proj.weight.is_meta:
+            return
+
         q_up, q_rope = self.q_b_proj.weight.T.view(
             -1, self.num_heads, self.qk_nope_head_dim + self.qk_rope_head_dim
         ).split([self.qk_nope_head_dim, self.qk_rope_head_dim], dim=-1)
-        self.q_up = torch.nn.Parameter(q_up.reshape(-1, self.num_heads * self.qk_nope_head_dim).unsqueeze(0).detach())
         self.q_rope = torch.nn.Parameter(
             q_rope.reshape(-1, self.num_heads * self.qk_rope_head_dim).unsqueeze(0).detach()
+        )
+        self.q_up = torch.nn.Parameter(
+            q_up.reshape(-1, self.num_heads * self.qk_nope_head_dim).unsqueeze(0).detach()
         )
 
         k_up, v_up = self.kv_b_proj.weight.T.view(-1, self.num_heads, self.qk_nope_head_dim + self.v_head_dim).split(
@@ -270,7 +287,20 @@ class QEffGlmMoeDsaAttention(GlmMoeDsaAttention):
     def _q_resid_and_query_pe(self, hidden_states, position_embeddings):
         batch_size, seq_len = hidden_states.shape[:-1]
         q_resid = self.q_a_layernorm(self.q_a_proj(hidden_states))
-        q_pe = torch.matmul(q_resid, self.q_rope)
+        # Compute q_rope inline from q_b_proj.weight.  A .clone() at the start
+        # gives this branch a new independent storage so it does not alias the
+        # q_b_proj.weight operand that self.q_b_proj(q_resid) also lifts.  Without
+        # it Dynamo sees two input nodes backed by the same META storage and raises
+        # "Input-to-input aliasing" in check_aliasing_and_input_mutation.
+        q_rope_w = (
+            self.q_b_proj.weight.clone()
+            .T
+            .reshape(-1, self.num_heads, self.qk_nope_head_dim + self.qk_rope_head_dim)
+            [..., self.qk_nope_head_dim:]
+            .reshape(-1, self.num_heads * self.qk_rope_head_dim)
+            .unsqueeze(0)
+        )
+        q_pe = torch.matmul(q_resid, q_rope_w)
         q_pe = q_pe.view(batch_size, seq_len, self.num_heads, self.qk_rope_head_dim).transpose(1, 2)
         cos, sin = position_embeddings
         q_pe = apply_rotary_pos_emb(q_pe, cos, sin, unsqueeze_dim=1)
@@ -353,7 +383,7 @@ class QEffGlmMoeDsaAttention(GlmMoeDsaAttention):
             torch.full((1,), MIN_MASKED_ATTENTION_VALUE, dtype=query_states.dtype, device=query_states.device),
         )
         combined_mask = index_mask.unsqueeze(1)
-        if attention_mask is not None and attention_mask.shape[-1] > 0:
+        if attention_mask is not None:
             combined_mask = combined_mask + attention_mask[..., :total_len]
 
         attn_output, attn_weights = eager_attention_forward(
@@ -498,12 +528,29 @@ class QEffGlmMoeDsaDecoderLayer(GlmMoeDsaDecoderLayer):
         return hidden_states, indexer_key_cache
 
 
+class QEffGlmMoeDsaDenseDecoderLayer(QEffGlmMoeDsaDecoderLayer):
+    """Marker subclass for dense-MLP decoder layers (mlp_layer_types == 'dense').
+
+    Same behaviour as QEffGlmMoeDsaDecoderLayer; distinct class gives each layer
+    type a separate Dynamo guard → separate invoke_subgraph cached graph, so the
+    dense layer (fewer params) and the MoE layer (more params) don't share one
+    graph and produce a "forward() takes N positional arguments but M were given".
+    """
+
+
+class QEffGlmMoeDsaSparseDecoderLayer(QEffGlmMoeDsaDecoderLayer):
+    """Marker subclass for sparse/MoE decoder layers (mlp_layer_types == 'sparse').
+
+    See QEffGlmMoeDsaDenseDecoderLayer for rationale.
+    """
+
+
 class QEffGlmMoeDsaTopkRouter(GlmMoeDsaTopkRouter):
     def forward(self, hidden_states):
         hidden_states = hidden_states.view(-1, self.config.hidden_size)
         router_logits = F.linear(hidden_states, self.weight)
         router_scores = router_logits.sigmoid()
-        scores_for_choice = router_scores + self.e_score_correction_bias.unsqueeze(0)
+        scores_for_choice = router_scores + self.e_score_correction_bias.unsqueeze(0).to(router_scores.device)
         group_scores = torch.einsum(
             "abc->ab",
             scores_for_choice.view(-1, self.n_group, self.n_routed_experts // self.n_group).topk(2, dim=-1)[0],
@@ -528,19 +575,41 @@ class QEffGlmMoeDsaTopkRouter(GlmMoeDsaTopkRouter):
 
 class QEffGlmMoeDsaMoE(GlmMoeDsaMoE):
     def __qeff_init__(self):
+        # Skip all derived parameter creation on meta device (weight-free export).
+        # all_gate_proj/all_up_proj/all_down_proj are NOT in the original checkpoint
+        # so they cannot be promoted to weight-spec entries; leaving them as ONNX
+        # initializers fails at save time with "Cannot copy out of meta tensor".
+        # moe() falls back to computing them inline from experts.gate_up_proj and
+        # experts.down_proj (which ARE in the checkpoint) instead.
+        if self.experts.gate_up_proj.is_meta:
+            self.act_fn = self.experts.act_fn
+            self.num_experts = self.experts.num_experts
+            return
+
         gate_proj, up_proj = self.experts.gate_up_proj.chunk(2, dim=1)
         self.all_gate_proj = torch.nn.Parameter(gate_proj.transpose(1, 2).contiguous())
         self.all_up_proj = torch.nn.Parameter(up_proj.transpose(1, 2).contiguous())
         self.all_down_proj = torch.nn.Parameter(self.experts.down_proj.transpose(1, 2).contiguous())
         self.act_fn = self.experts.act_fn
         self.num_experts = self.experts.num_experts
+        del self.experts
 
     def moe(self, hidden_states: torch.Tensor, topk_indices: torch.Tensor, topk_weights: torch.Tensor):
         bs, seq_len, _ = hidden_states.shape
         hidden_states = hidden_states.view(-1, hidden_states.shape[-1])
-        gate_proj = self.all_gate_proj[topk_indices.flatten()]
-        up_proj = self.all_up_proj[topk_indices.flatten()]
-        down_proj = self.all_down_proj[topk_indices.flatten()]
+        if hasattr(self, "all_gate_proj"):
+            gate_proj = self.all_gate_proj[topk_indices.flatten()]
+            up_proj = self.all_up_proj[topk_indices.flatten()]
+            down_proj = self.all_down_proj[topk_indices.flatten()]
+        else:
+            # Meta/weight-free path: derive inline from experts (present in checkpoint).
+            # Use slicing instead of .chunk() — chunk() becomes SplitToSequence in ONNX
+            # which the QAIC compiler does not support inside subfunctions.  Slice ops are
+            # fully supported and semantically equivalent.
+            mid = self.experts.gate_up_proj.shape[1] // 2
+            gate_proj = self.experts.gate_up_proj[:, :mid, :].transpose(1, 2)[topk_indices.flatten()]
+            up_proj = self.experts.gate_up_proj[:, mid:, :].transpose(1, 2)[topk_indices.flatten()]
+            down_proj = self.experts.down_proj.transpose(1, 2)[topk_indices.flatten()]
         expert_in = (
             hidden_states.unsqueeze(1).expand(-1, self.gate.top_k, -1).contiguous().view(-1, 1, self.config.hidden_size)
         )
@@ -569,6 +638,17 @@ QEffGlmMoeDsaRotaryEmbedding = GlmMoeDsaRotaryEmbedding
 
 
 class QEffGlmMoeDsaModel(GlmMoeDsaModel):
+    def __qeff_init__(self):
+        # Assign each decoder layer to its type-specific marker subclass so that
+        # Dynamo generates a distinct invoke_subgraph identifier per layer type.
+        layer_types = getattr(self.config, "mlp_layer_types", None) or []
+        for i, layer in enumerate(self.layers):
+            lt = layer_types[i] if i < len(layer_types) else "sparse"
+            if lt == "dense":
+                layer.__class__ = QEffGlmMoeDsaDenseDecoderLayer
+            else:
+                layer.__class__ = QEffGlmMoeDsaSparseDecoderLayer
+
     def forward(
         self,
         input_ids: Optional[torch.LongTensor] = None,
@@ -657,7 +737,7 @@ class QEffGlmMoeDsaModel(GlmMoeDsaModel):
 
 class QEffGlmMoeDsaForCausalLM(GlmMoeDsaForCausalLM):
     def get_submodules_for_export(self) -> Type[nn.Module]:
-        return {QEffGlmMoeDsaDecoderLayer}
+        return {QEffGlmMoeDsaDenseDecoderLayer, QEffGlmMoeDsaSparseDecoderLayer}
 
     def forward(
         self,

@@ -21,7 +21,7 @@ if str(REPO_ROOT) not in sys.path:
 
 def main():
     parser = argparse.ArgumentParser(description="Compile and run GLM-MoE-DSA causal LM generation on AI 100.")
-    parser.add_argument("--model-id", default="tiny-random/glm-5.1")
+    parser.add_argument("--model-id", default="" "")
     parser.add_argument("--ctx-len", type=int, default=32)
     parser.add_argument("--prefill-seq-len", type=int, default=1)
     parser.add_argument("--generation-len", type=int, default=8)

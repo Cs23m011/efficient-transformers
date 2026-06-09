@@ -317,7 +317,11 @@ def export_weight_free_onnx(
 
 def _load_checkpoint_tensor(checkpoint_file: str, key: str) -> np.ndarray:
     handle = safe_open(checkpoint_file, framework="pt")
-    return handle.get_tensor(key).detach().cpu().numpy()
+    tensor = handle.get_tensor(key).detach().cpu()
+    # numpy does not support bfloat16; cast to float32 for ORT compatibility
+    if tensor.dtype == torch.bfloat16:
+        tensor = tensor.to(torch.float32)
+    return tensor.numpy()
 
 
 def _default_weights_roots(weight_spec_path: Path, spec) -> List[Path]:
