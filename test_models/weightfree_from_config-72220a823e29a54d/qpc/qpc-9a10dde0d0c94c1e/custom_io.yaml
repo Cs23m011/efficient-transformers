@@ -1,0 +1,72 @@
+ - IOName: past_key.0
+   Precision: float16
+
+ - IOName: past_value.0
+   Precision: float16
+
+ - IOName: past_key.1
+   Precision: float16
+
+ - IOName: past_value.1
+   Precision: float16
+
+ - IOName: past_key.2
+   Precision: float16
+
+ - IOName: past_value.2
+   Precision: float16
+
+ - IOName: past_key.3
+   Precision: float16
+
+ - IOName: past_value.3
+   Precision: float16
+
+ - IOName: past_key.4
+   Precision: float16
+
+ - IOName: past_value.4
+   Precision: float16
+
+ - IOName: past_key.5
+   Precision: float16
+
+ - IOName: past_value.5
+   Precision: float16
+
+ - IOName: past_key.0_RetainedState
+   Precision: float16
+
+ - IOName: past_value.0_RetainedState
+   Precision: float16
+
+ - IOName: past_key.1_RetainedState
+   Precision: float16
+
+ - IOName: past_value.1_RetainedState
+   Precision: float16
+
+ - IOName: past_key.2_RetainedState
+   Precision: float16
+
+ - IOName: past_value.2_RetainedState
+   Precision: float16
+
+ - IOName: past_key.3_RetainedState
+   Precision: float16
+
+ - IOName: past_value.3_RetainedState
+   Precision: float16
+
+ - IOName: past_key.4_RetainedState
+   Precision: float16
+
+ - IOName: past_value.4_RetainedState
+   Precision: float16
+
+ - IOName: past_key.5_RetainedState
+   Precision: float16
+
+ - IOName: past_value.5_RetainedState
+   Precision: float16
+

@@ -22,7 +22,7 @@ from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 # torch._dynamo.config.verbose=True 
 # import logging
 # logging.getLogger("torch._dynamo").setLevel(logging.DEBUG)
-
+from safetensors import safe_open
 from QEfficient.exporter.weight_free import _default_weights_roots, load_weight_free_ort_inputs
 from QEfficient.exporter.weight_spec import (
     ExternalDataFile,
@@ -131,14 +131,20 @@ def convert_checkpoint_to_fp32(onnx_path: Path, weight_spec_path: Path) -> None:
             raise FileNotFoundError(f"Cannot resolve external data file: {ext_file.path}")
 
         keys_needed = needed[old_idx]
-        tensors = load_file(str(abs_path))
-        fp32_tensors = {k: v.to(torch.float32) for k, v in tensors.items() if k in keys_needed}
+        with safe_open(str(abs_path), framework="pt") as f:
+            already_fp32 = all(f.get_slice(k).get_dtype() == "F32" for k in keys_needed)
 
-        new_idx = old_to_new[old_idx]
-        out_name = f"model_{new_idx:04d}.safetensors"
-        save_file(fp32_tensors, str(export_dir / out_name))
-        new_files.append(ExternalDataFile(path=out_name, format="safetensors"))
-        print(f"  {abs_path.name}  ({len(keys_needed)}/{len(tensors)} tensors)  →  {out_name}  (float32)")
+        if already_fp32:
+            # Checkpoint shard is already FP32 (download_fp32.py) — reference in place, zero copy.
+            new_files.append(ExternalDataFile(path=str(abs_path), format="safetensors"))
+            print(f"  {abs_path.name}  ({len(keys_needed)} tensors)  ->  referenced in place (already fp32)")
+        else:
+            tensors = load_file(str(abs_path))
+            fp32_tensors = {k: v.to(torch.float32) for k, v in tensors.items() if k in keys_needed}
+            out_name = f"model_{old_to_new[old_idx]:04d}.safetensors"
+            save_file(fp32_tensors, str(export_dir / out_name))
+            new_files.append(ExternalDataFile(path=out_name, format="safetensors"))
+            print(f"  {abs_path.name}  ({len(keys_needed)}/{len(tensors)} tensors)  ->  {out_name}  (float32)")
 
     for inp in spec.inputs:
         inp.location.file = old_to_new[int(inp.location.file)]
@@ -174,11 +180,12 @@ PROMPT = "what is faith ?"
 #model_name="Qwen/Qwen3-32B"
 #model_name="meta-llama/Llama-3.3-70B-Instruct"
 #model_name="Qwen/Qwen3-30B-A3B-Instruct-2507"
-model_name="tiny-random/glm-5.1"
+#model_name="tiny-random/glm-5.1"
+model_name="/home/huggingface_hub/glm51-fp32-stacked"
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 config = AutoConfig.from_pretrained(model_name)
-#config.num_hidden_layers = 2
-config.torch_dtype = torch.float32
+config.num_hidden_layers = 6
+config.dtype = torch.float32
 print(config)
 
 CONTINUOUS_BATCHING = False
@@ -238,7 +245,7 @@ compile_start = time.perf_counter()
 qpc_path = qeff_model.compile(
     onnx_path=str(onnx_path),
     compile_dir=str(onnx_path.parent / "qpc"),
-    prefill_seq_len=8,
+    prefill_seq_len=1,
     ctx_len=256,
     num_devices=4,
     mxfp6_matmul=False,
@@ -253,34 +260,33 @@ print(f"compile time            : {compile_elapsed:.3f} sec")
 print(f"Compile peak RAM        : {compile_peak_ram:.2f} GB")
 print(f"QPC: {qpc_path}")
 
-#── OnnxRT inference ──────────────────────────────────────────────────────────
-# print("\n--- OnnxRT inference ---")
-# session = ort.InferenceSession(str(onnx_path))
-# ort_inputs = load_weight_free_ort_inputs(weight_spec_path, runner.input_handler.prepare_ort_inputs())
-# ort_outputs = runner.run_ort_session(ort_inputs, session)
-# ort_outputs = runner.input_handler.update_ort_outputs(ort_outputs)
+# #── OnnxRT inference ──────────────────────────────────────────────────────────
+print("\n--- OnnxRT inference ---")
+session = ort.InferenceSession(str(onnx_path))
+ort_inputs = load_weight_free_ort_inputs(weight_spec_path, runner.input_handler.prepare_ort_inputs())
+ort_outputs = runner.run_ort_session(ort_inputs, session)
+ort_outputs = runner.input_handler.update_ort_outputs(ort_outputs)
 
-# ort_generated_ids = []
-# for _ in range(1, runner.gen_len):
-#     ort_generated_ids.append(ort_outputs["logits"].argmax(-1).reshape(-1, 1))
-#     ort_inputs = runner.input_handler.update_ort_inputs(ort_inputs, ort_outputs)
-#     ort_inputs = load_weight_free_ort_inputs(weight_spec_path, ort_inputs)
-#     ort_outputs = runner.run_ort_session(ort_inputs, session)
-#     ort_outputs = runner.input_handler.update_ort_outputs(ort_outputs)
+ort_generated_ids = []
+for _ in range(1, runner.gen_len):
+    ort_generated_ids.append(ort_outputs["logits"].argmax(-1).reshape(-1, 1))
+    ort_inputs = runner.input_handler.update_ort_inputs(ort_inputs, ort_outputs)
+    ort_inputs = load_weight_free_ort_inputs(weight_spec_path, ort_inputs)
+    ort_outputs = runner.run_ort_session(ort_inputs, session)
+    ort_outputs = runner.input_handler.update_ort_outputs(ort_outputs)
 
-# ort_generated_ids.append(ort_outputs["logits"].argmax(-1).reshape(-1, 1))
-# ort_generated_ids = np.concatenate(ort_generated_ids, axis=1)
-# ort_generated_text = tokenizer.batch_decode(ort_generated_ids, skip_special_tokens=True)
+ort_generated_ids.append(ort_outputs["logits"].argmax(-1).reshape(-1, 1))
+ort_generated_ids = np.concatenate(ort_generated_ids, axis=1)
+ort_generated_text = tokenizer.batch_decode(ort_generated_ids, skip_special_tokens=True)
 
-# #── PyTorch inference ─────────────────────────────────────────────────────────
-pt_config = AutoConfig.from_pretrained("tiny-random/glm-5.1")
-#pt_config.num_hidden_layers = 2
+# # #── PyTorch inference ─────────────────────────────────────────────────────────
+pt_config = AutoConfig.from_pretrained("/home/huggingface_hub/glm51-fp32-stacked")
+pt_config.num_hidden_layers = 6
 print("\n--- PyTorch inference ---")
 pt_model = AutoModelForCausalLM.from_pretrained(
-      "tiny-random/glm-5.1",
+      "/home/huggingface_hub/glm51-fp32-stacked",
       config=pt_config,
       torch_dtype=torch.float32,
-      attn_implementation="eager",
       ignore_mismatched_sizes=True,
   )
 pt_model.eval()
@@ -300,7 +306,7 @@ pt_generated_ids = pt_out[:, input_ids.shape[1]:].numpy()
 pt_generated_text = tokenizer.batch_decode(pt_generated_ids, skip_special_tokens=True)
 
 # #── QPC inference ─────────────────────────────────────────────────────────────
-# print("\n--- QPC inference ---")
+print("\n--- QPC inference ---")
 qpc_generated_ids = None
 qpc_generated_text = None
 try:
@@ -317,11 +323,11 @@ except RuntimeError as exc:
     print(f"Skipping QPC generate: {exc}")
 
 #── Token comparison ──────────────────────────────────────────────────────────
-print("\n========== Token Comparison ==========")
-print(f"Prompt: {PROMPT!r}")
-print()
-# print(f"ORT  generated_ids : {ort_generated_ids}")
-# print(f"ORT  generated_text: {ort_generated_text}")
+# print("\n========== Token Comparison ==========")
+# print(f"Prompt: {PROMPT!r}")
+# print()
+print(f"ORT  generated_ids : {ort_generated_ids}")
+print(f"ORT  generated_text: {ort_generated_text}")
 print()
 print(f"PT   generated_ids : {pt_generated_ids}")
 print(f"PT   generated_text: {pt_generated_text}")
@@ -341,15 +347,10 @@ max_len = max(
 header = f"{'Step':>5}  {'ORT':>8}  {'PT':>8}  {'QPC':>8}  {'ORT==PT':>8}  {'ORT==QPC':>9}"
 print(header)
 print("-" * len(header))
-ort_tok="6"
 for i in range(max_len):
-    #ort_tok = int(ort_generated_ids[0, i]) if i < ort_generated_ids.shape[1] else -1
+    ort_tok = int(ort_generated_ids[0, i]) if i < ort_generated_ids.shape[1] else -1
     pt_tok  = int(pt_generated_ids[0, i])  if i < pt_generated_ids.shape[1]  else -1
     qpc_tok = int(qpc_generated_ids[0, i]) if (qpc_generated_ids is not None and i < qpc_generated_ids.shape[1]) else -1
     ort_eq_pt  = "✓" if ort_tok == pt_tok  else "✗"
     ort_eq_qpc = "✓" if (qpc_generated_ids is not None and ort_tok == qpc_tok) else ("N/A" if qpc_generated_ids is None else "✗")
     print(f"{i:>5}  {ort_tok:>8}  {pt_tok:>8}  {qpc_tok:>8}  {ort_eq_pt:>8}  {ort_eq_qpc:>9}")
-
-print()
-print(f"Weight-free ONNX: {onnx_path}")
-print(f"Weight spec: {weight_spec_path}")

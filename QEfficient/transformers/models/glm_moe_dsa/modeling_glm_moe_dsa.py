@@ -384,7 +384,7 @@ class QEffGlmMoeDsaAttention(GlmMoeDsaAttention):
         )
         combined_mask = index_mask.unsqueeze(1)
         if attention_mask is not None:
-            combined_mask = combined_mask + attention_mask[..., :total_len]
+            combined_mask = combined_mask.masked_fill(attention_mask[..., :total_len], MIN_MASKED_ATTENTION_VALUE)
 
         attn_output, attn_weights = eager_attention_forward(
             self,

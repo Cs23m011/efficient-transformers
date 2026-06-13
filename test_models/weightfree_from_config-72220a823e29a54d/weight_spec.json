@@ -1,0 +1,884 @@
+{
+  "files": [
+    {
+      "format": "safetensors",
+      "path": "/home/huggingface_hub/glm51-fp32-stacked/base-model-00001-of-00282.safetensors"
+    },
+    {
+      "format": "safetensors",
+      "path": "/home/huggingface_hub/glm51-fp32-stacked/base-model-00002-of-00282.safetensors"
+    },
+    {
+      "format": "safetensors",
+      "path": "/home/huggingface_hub/glm51-fp32-stacked/base-model-00038-of-00282.safetensors"
+    },
+    {
+      "format": "safetensors",
+      "path": "/home/huggingface_hub/glm51-fp32-stacked/base-model-00039-of-00282.safetensors"
+    },
+    {
+      "format": "safetensors",
+      "path": "/home/huggingface_hub/glm51-fp32-stacked/base-model-00075-of-00282.safetensors"
+    },
+    {
+      "format": "safetensors",
+      "path": "/home/huggingface_hub/glm51-fp32-stacked/base-model-00079-of-00282.safetensors"
+    },
+    {
+      "format": "safetensors",
+      "path": "/home/huggingface_hub/glm51-fp32-stacked/base-model-00116-of-00282.safetensors"
+    },
+    {
+      "format": "safetensors",
+      "path": "/home/huggingface_hub/glm51-fp32-stacked/base-model-00120-of-00282.safetensors"
+    },
+    {
+      "format": "safetensors",
+      "path": "/home/huggingface_hub/glm51-fp32-stacked/base-model-00156-of-00282.safetensors"
+    },
+    {
+      "format": "safetensors",
+      "path": "/home/huggingface_hub/glm51-fp32-stacked/base-model-00160-of-00282.safetensors"
+    },
+    {
+      "format": "safetensors",
+      "path": "/home/huggingface_hub/glm51-fp32-stacked/base-model-00282-of-00282.safetensors"
+    },
+    {
+      "format": "safetensors",
+      "path": "/home/huggingface_hub/glm51-fp32-stacked/experts-layer-00003.safetensors"
+    },
+    {
+      "format": "safetensors",
+      "path": "/home/huggingface_hub/glm51-fp32-stacked/experts-layer-00004.safetensors"
+    },
+    {
+      "format": "safetensors",
+      "path": "/home/huggingface_hub/glm51-fp32-stacked/experts-layer-00005.safetensors"
+    }
+  ],
+  "inputs": [
+    {
+      "location": {
+        "file": 0,
+        "key": "model.embed_tokens.weight"
+      },
+      "name": "model.embed_tokens.weight"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "model.layers.0.input_layernorm.weight"
+      },
+      "name": "model.layers.0.input_layernorm.weight"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "model.layers.0.self_attn.q_a_proj.weight"
+      },
+      "name": "model.layers.0.self_attn.q_a_proj.weight"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "model.layers.0.self_attn.q_a_layernorm.weight"
+      },
+      "name": "model.layers.0.self_attn.q_a_layernorm.weight"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "model.layers.0.self_attn.q_b_proj.weight"
+      },
+      "name": "model.layers.0.self_attn.q_b_proj.weight"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "model.layers.0.self_attn.kv_a_proj_with_mqa.weight"
+      },
+      "name": "model.layers.0.self_attn.kv_a_proj_with_mqa.weight"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "model.layers.0.self_attn.kv_a_layernorm.weight"
+      },
+      "name": "model.layers.0.self_attn.kv_a_layernorm.weight"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "model.layers.0.self_attn.kv_b_proj.weight"
+      },
+      "name": "model.layers.0.self_attn.kv_b_proj.weight"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "model.layers.0.self_attn.indexer.wq_b.weight"
+      },
+      "name": "model.layers.0.self_attn.indexer.wq_b.weight"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "model.layers.0.self_attn.indexer.wk.weight"
+      },
+      "name": "model.layers.0.self_attn.indexer.wk.weight"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "model.layers.0.self_attn.indexer.k_norm.weight"
+      },
+      "name": "model.layers.0.self_attn.indexer.k_norm.weight"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "model.layers.0.self_attn.indexer.k_norm.bias"
+      },
+      "name": "model.layers.0.self_attn.indexer.k_norm.bias"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "model.layers.0.self_attn.indexer.weights_proj.weight"
+      },
+      "name": "model.layers.0.self_attn.indexer.weights_proj.weight"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "model.layers.0.self_attn.o_proj.weight"
+      },
+      "name": "model.layers.0.self_attn.o_proj.weight"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "model.layers.0.post_attention_layernorm.weight"
+      },
+      "name": "model.layers.0.post_attention_layernorm.weight"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "model.layers.0.mlp.gate_proj.weight"
+      },
+      "name": "model.layers.0.mlp.gate_proj.weight"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "model.layers.0.mlp.up_proj.weight"
+      },
+      "name": "model.layers.0.mlp.up_proj.weight"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "model.layers.0.mlp.down_proj.weight"
+      },
+      "name": "model.layers.0.mlp.down_proj.weight"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "model.layers.1.input_layernorm.weight"
+      },
+      "name": "model.layers.1.input_layernorm.weight"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "model.layers.1.self_attn.q_a_proj.weight"
+      },
+      "name": "model.layers.1.self_attn.q_a_proj.weight"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "model.layers.1.self_attn.q_a_layernorm.weight"
+      },
+      "name": "model.layers.1.self_attn.q_a_layernorm.weight"
+    },
+    {
+      "location": {
+        "file": 1,
+        "key": "model.layers.1.self_attn.q_b_proj.weight"
+      },
+      "name": "model.layers.1.self_attn.q_b_proj.weight"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "model.layers.1.self_attn.kv_a_proj_with_mqa.weight"
+      },
+      "name": "model.layers.1.self_attn.kv_a_proj_with_mqa.weight"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "model.layers.1.self_attn.kv_a_layernorm.weight"
+      },
+      "name": "model.layers.1.self_attn.kv_a_layernorm.weight"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "model.layers.1.self_attn.kv_b_proj.weight"
+      },
+      "name": "model.layers.1.self_attn.kv_b_proj.weight"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "model.layers.1.self_attn.indexer.wq_b.weight"
+      },
+      "name": "model.layers.1.self_attn.indexer.wq_b.weight"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "model.layers.1.self_attn.indexer.wk.weight"
+      },
+      "name": "model.layers.1.self_attn.indexer.wk.weight"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "model.layers.1.self_attn.indexer.k_norm.weight"
+      },
+      "name": "model.layers.1.self_attn.indexer.k_norm.weight"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "model.layers.1.self_attn.indexer.k_norm.bias"
+      },
+      "name": "model.layers.1.self_attn.indexer.k_norm.bias"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "model.layers.1.self_attn.indexer.weights_proj.weight"
+      },
+      "name": "model.layers.1.self_attn.indexer.weights_proj.weight"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "model.layers.1.self_attn.o_proj.weight"
+      },
+      "name": "model.layers.1.self_attn.o_proj.weight"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "model.layers.1.post_attention_layernorm.weight"
+      },
+      "name": "model.layers.1.post_attention_layernorm.weight"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "model.layers.1.mlp.gate_proj.weight"
+      },
+      "name": "model.layers.1.mlp.gate_proj.weight"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "model.layers.1.mlp.up_proj.weight"
+      },
+      "name": "model.layers.1.mlp.up_proj.weight"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "model.layers.1.mlp.down_proj.weight"
+      },
+      "name": "model.layers.1.mlp.down_proj.weight"
+    },
+    {
+      "location": {
+        "file": 2,
+        "key": "model.layers.2.input_layernorm.weight"
+      },
+      "name": "model.layers.2.input_layernorm.weight"
+    },
+    {
+      "location": {
+        "file": 3,
+        "key": "model.layers.2.self_attn.q_a_proj.weight"
+      },
+      "name": "model.layers.2.self_attn.q_a_proj.weight"
+    },
+    {
+      "location": {
+        "file": 2,
+        "key": "model.layers.2.self_attn.q_a_layernorm.weight"
+      },
+      "name": "model.layers.2.self_attn.q_a_layernorm.weight"
+    },
+    {
+      "location": {
+        "file": 3,
+        "key": "model.layers.2.self_attn.q_b_proj.weight"
+      },
+      "name": "model.layers.2.self_attn.q_b_proj.weight"
+    },
+    {
+      "location": {
+        "file": 2,
+        "key": "model.layers.2.self_attn.kv_a_proj_with_mqa.weight"
+      },
+      "name": "model.layers.2.self_attn.kv_a_proj_with_mqa.weight"
+    },
+    {
+      "location": {
+        "file": 2,
+        "key": "model.layers.2.self_attn.kv_a_layernorm.weight"
+      },
+      "name": "model.layers.2.self_attn.kv_a_layernorm.weight"
+    },
+    {
+      "location": {
+        "file": 2,
+        "key": "model.layers.2.self_attn.kv_b_proj.weight"
+      },
+      "name": "model.layers.2.self_attn.kv_b_proj.weight"
+    },
+    {
+      "location": {
+        "file": 2,
+        "key": "model.layers.2.self_attn.indexer.wq_b.weight"
+      },
+      "name": "model.layers.2.self_attn.indexer.wq_b.weight"
+    },
+    {
+      "location": {
+        "file": 2,
+        "key": "model.layers.2.self_attn.indexer.wk.weight"
+      },
+      "name": "model.layers.2.self_attn.indexer.wk.weight"
+    },
+    {
+      "location": {
+        "file": 2,
+        "key": "model.layers.2.self_attn.indexer.k_norm.weight"
+      },
+      "name": "model.layers.2.self_attn.indexer.k_norm.weight"
+    },
+    {
+      "location": {
+        "file": 2,
+        "key": "model.layers.2.self_attn.indexer.k_norm.bias"
+      },
+      "name": "model.layers.2.self_attn.indexer.k_norm.bias"
+    },
+    {
+      "location": {
+        "file": 2,
+        "key": "model.layers.2.self_attn.indexer.weights_proj.weight"
+      },
+      "name": "model.layers.2.self_attn.indexer.weights_proj.weight"
+    },
+    {
+      "location": {
+        "file": 2,
+        "key": "model.layers.2.self_attn.o_proj.weight"
+      },
+      "name": "model.layers.2.self_attn.o_proj.weight"
+    },
+    {
+      "location": {
+        "file": 2,
+        "key": "model.layers.2.post_attention_layernorm.weight"
+      },
+      "name": "model.layers.2.post_attention_layernorm.weight"
+    },
+    {
+      "location": {
+        "file": 2,
+        "key": "model.layers.2.mlp.gate_proj.weight"
+      },
+      "name": "model.layers.2.mlp.gate_proj.weight"
+    },
+    {
+      "location": {
+        "file": 2,
+        "key": "model.layers.2.mlp.up_proj.weight"
+      },
+      "name": "model.layers.2.mlp.up_proj.weight"
+    },
+    {
+      "location": {
+        "file": 2,
+        "key": "model.layers.2.mlp.down_proj.weight"
+      },
+      "name": "model.layers.2.mlp.down_proj.weight"
+    },
+    {
+      "location": {
+        "file": 4,
+        "key": "model.layers.3.input_layernorm.weight"
+      },
+      "name": "model.layers.3.input_layernorm.weight"
+    },
+    {
+      "location": {
+        "file": 5,
+        "key": "model.layers.3.self_attn.q_a_proj.weight"
+      },
+      "name": "model.layers.3.self_attn.q_a_proj.weight"
+    },
+    {
+      "location": {
+        "file": 5,
+        "key": "model.layers.3.self_attn.q_a_layernorm.weight"
+      },
+      "name": "model.layers.3.self_attn.q_a_layernorm.weight"
+    },
+    {
+      "location": {
+        "file": 5,
+        "key": "model.layers.3.self_attn.q_b_proj.weight"
+      },
+      "name": "model.layers.3.self_attn.q_b_proj.weight"
+    },
+    {
+      "location": {
+        "file": 5,
+        "key": "model.layers.3.self_attn.kv_a_proj_with_mqa.weight"
+      },
+      "name": "model.layers.3.self_attn.kv_a_proj_with_mqa.weight"
+    },
+    {
+      "location": {
+        "file": 5,
+        "key": "model.layers.3.self_attn.kv_a_layernorm.weight"
+      },
+      "name": "model.layers.3.self_attn.kv_a_layernorm.weight"
+    },
+    {
+      "location": {
+        "file": 5,
+        "key": "model.layers.3.self_attn.kv_b_proj.weight"
+      },
+      "name": "model.layers.3.self_attn.kv_b_proj.weight"
+    },
+    {
+      "location": {
+        "file": 5,
+        "key": "model.layers.3.self_attn.indexer.wq_b.weight"
+      },
+      "name": "model.layers.3.self_attn.indexer.wq_b.weight"
+    },
+    {
+      "location": {
+        "file": 5,
+        "key": "model.layers.3.self_attn.indexer.wk.weight"
+      },
+      "name": "model.layers.3.self_attn.indexer.wk.weight"
+    },
+    {
+      "location": {
+        "file": 5,
+        "key": "model.layers.3.self_attn.indexer.k_norm.weight"
+      },
+      "name": "model.layers.3.self_attn.indexer.k_norm.weight"
+    },
+    {
+      "location": {
+        "file": 5,
+        "key": "model.layers.3.self_attn.indexer.k_norm.bias"
+      },
+      "name": "model.layers.3.self_attn.indexer.k_norm.bias"
+    },
+    {
+      "location": {
+        "file": 5,
+        "key": "model.layers.3.self_attn.indexer.weights_proj.weight"
+      },
+      "name": "model.layers.3.self_attn.indexer.weights_proj.weight"
+    },
+    {
+      "location": {
+        "file": 5,
+        "key": "model.layers.3.self_attn.o_proj.weight"
+      },
+      "name": "model.layers.3.self_attn.o_proj.weight"
+    },
+    {
+      "location": {
+        "file": 5,
+        "key": "model.layers.3.post_attention_layernorm.weight"
+      },
+      "name": "model.layers.3.post_attention_layernorm.weight"
+    },
+    {
+      "location": {
+        "file": 5,
+        "key": "model.layers.3.mlp.gate.weight"
+      },
+      "name": "model.layers.3.mlp.gate.weight"
+    },
+    {
+      "location": {
+        "file": 11,
+        "key": "model.layers.3.mlp.experts.gate_up_proj"
+      },
+      "name": "model.layers.3.mlp.experts.gate_up_proj"
+    },
+    {
+      "location": {
+        "file": 11,
+        "key": "model.layers.3.mlp.experts.down_proj"
+      },
+      "name": "model.layers.3.mlp.experts.down_proj"
+    },
+    {
+      "location": {
+        "file": 5,
+        "key": "model.layers.3.mlp.shared_experts.gate_proj.weight"
+      },
+      "name": "model.layers.3.mlp.shared_experts.gate_proj.weight"
+    },
+    {
+      "location": {
+        "file": 5,
+        "key": "model.layers.3.mlp.shared_experts.up_proj.weight"
+      },
+      "name": "model.layers.3.mlp.shared_experts.up_proj.weight"
+    },
+    {
+      "location": {
+        "file": 5,
+        "key": "model.layers.3.mlp.shared_experts.down_proj.weight"
+      },
+      "name": "model.layers.3.mlp.shared_experts.down_proj.weight"
+    },
+    {
+      "location": {
+        "file": 6,
+        "key": "model.layers.4.input_layernorm.weight"
+      },
+      "name": "model.layers.4.input_layernorm.weight"
+    },
+    {
+      "location": {
+        "file": 7,
+        "key": "model.layers.4.self_attn.q_a_proj.weight"
+      },
+      "name": "model.layers.4.self_attn.q_a_proj.weight"
+    },
+    {
+      "location": {
+        "file": 7,
+        "key": "model.layers.4.self_attn.q_a_layernorm.weight"
+      },
+      "name": "model.layers.4.self_attn.q_a_layernorm.weight"
+    },
+    {
+      "location": {
+        "file": 7,
+        "key": "model.layers.4.self_attn.q_b_proj.weight"
+      },
+      "name": "model.layers.4.self_attn.q_b_proj.weight"
+    },
+    {
+      "location": {
+        "file": 7,
+        "key": "model.layers.4.self_attn.kv_a_proj_with_mqa.weight"
+      },
+      "name": "model.layers.4.self_attn.kv_a_proj_with_mqa.weight"
+    },
+    {
+      "location": {
+        "file": 7,
+        "key": "model.layers.4.self_attn.kv_a_layernorm.weight"
+      },
+      "name": "model.layers.4.self_attn.kv_a_layernorm.weight"
+    },
+    {
+      "location": {
+        "file": 7,
+        "key": "model.layers.4.self_attn.kv_b_proj.weight"
+      },
+      "name": "model.layers.4.self_attn.kv_b_proj.weight"
+    },
+    {
+      "location": {
+        "file": 7,
+        "key": "model.layers.4.self_attn.indexer.wq_b.weight"
+      },
+      "name": "model.layers.4.self_attn.indexer.wq_b.weight"
+    },
+    {
+      "location": {
+        "file": 7,
+        "key": "model.layers.4.self_attn.indexer.wk.weight"
+      },
+      "name": "model.layers.4.self_attn.indexer.wk.weight"
+    },
+    {
+      "location": {
+        "file": 7,
+        "key": "model.layers.4.self_attn.indexer.k_norm.weight"
+      },
+      "name": "model.layers.4.self_attn.indexer.k_norm.weight"
+    },
+    {
+      "location": {
+        "file": 7,
+        "key": "model.layers.4.self_attn.indexer.k_norm.bias"
+      },
+      "name": "model.layers.4.self_attn.indexer.k_norm.bias"
+    },
+    {
+      "location": {
+        "file": 7,
+        "key": "model.layers.4.self_attn.indexer.weights_proj.weight"
+      },
+      "name": "model.layers.4.self_attn.indexer.weights_proj.weight"
+    },
+    {
+      "location": {
+        "file": 7,
+        "key": "model.layers.4.self_attn.o_proj.weight"
+      },
+      "name": "model.layers.4.self_attn.o_proj.weight"
+    },
+    {
+      "location": {
+        "file": 7,
+        "key": "model.layers.4.post_attention_layernorm.weight"
+      },
+      "name": "model.layers.4.post_attention_layernorm.weight"
+    },
+    {
+      "location": {
+        "file": 7,
+        "key": "model.layers.4.mlp.gate.weight"
+      },
+      "name": "model.layers.4.mlp.gate.weight"
+    },
+    {
+      "location": {
+        "file": 12,
+        "key": "model.layers.4.mlp.experts.gate_up_proj"
+      },
+      "name": "model.layers.4.mlp.experts.gate_up_proj"
+    },
+    {
+      "location": {
+        "file": 12,
+        "key": "model.layers.4.mlp.experts.down_proj"
+      },
+      "name": "model.layers.4.mlp.experts.down_proj"
+    },
+    {
+      "location": {
+        "file": 7,
+        "key": "model.layers.4.mlp.shared_experts.gate_proj.weight"
+      },
+      "name": "model.layers.4.mlp.shared_experts.gate_proj.weight"
+    },
+    {
+      "location": {
+        "file": 7,
+        "key": "model.layers.4.mlp.shared_experts.up_proj.weight"
+      },
+      "name": "model.layers.4.mlp.shared_experts.up_proj.weight"
+    },
+    {
+      "location": {
+        "file": 7,
+        "key": "model.layers.4.mlp.shared_experts.down_proj.weight"
+      },
+      "name": "model.layers.4.mlp.shared_experts.down_proj.weight"
+    },
+    {
+      "location": {
+        "file": 8,
+        "key": "model.layers.5.input_layernorm.weight"
+      },
+      "name": "model.layers.5.input_layernorm.weight"
+    },
+    {
+      "location": {
+        "file": 9,
+        "key": "model.layers.5.self_attn.q_a_proj.weight"
+      },
+      "name": "model.layers.5.self_attn.q_a_proj.weight"
+    },
+    {
+      "location": {
+        "file": 9,
+        "key": "model.layers.5.self_attn.q_a_layernorm.weight"
+      },
+      "name": "model.layers.5.self_attn.q_a_layernorm.weight"
+    },
+    {
+      "location": {
+        "file": 9,
+        "key": "model.layers.5.self_attn.q_b_proj.weight"
+      },
+      "name": "model.layers.5.self_attn.q_b_proj.weight"
+    },
+    {
+      "location": {
+        "file": 9,
+        "key": "model.layers.5.self_attn.kv_a_proj_with_mqa.weight"
+      },
+      "name": "model.layers.5.self_attn.kv_a_proj_with_mqa.weight"
+    },
+    {
+      "location": {
+        "file": 9,
+        "key": "model.layers.5.self_attn.kv_a_layernorm.weight"
+      },
+      "name": "model.layers.5.self_attn.kv_a_layernorm.weight"
+    },
+    {
+      "location": {
+        "file": 9,
+        "key": "model.layers.5.self_attn.kv_b_proj.weight"
+      },
+      "name": "model.layers.5.self_attn.kv_b_proj.weight"
+    },
+    {
+      "location": {
+        "file": 9,
+        "key": "model.layers.5.self_attn.indexer.wq_b.weight"
+      },
+      "name": "model.layers.5.self_attn.indexer.wq_b.weight"
+    },
+    {
+      "location": {
+        "file": 9,
+        "key": "model.layers.5.self_attn.indexer.wk.weight"
+      },
+      "name": "model.layers.5.self_attn.indexer.wk.weight"
+    },
+    {
+      "location": {
+        "file": 9,
+        "key": "model.layers.5.self_attn.indexer.k_norm.weight"
+      },
+      "name": "model.layers.5.self_attn.indexer.k_norm.weight"
+    },
+    {
+      "location": {
+        "file": 9,
+        "key": "model.layers.5.self_attn.indexer.k_norm.bias"
+      },
+      "name": "model.layers.5.self_attn.indexer.k_norm.bias"
+    },
+    {
+      "location": {
+        "file": 9,
+        "key": "model.layers.5.self_attn.indexer.weights_proj.weight"
+      },
+      "name": "model.layers.5.self_attn.indexer.weights_proj.weight"
+    },
+    {
+      "location": {
+        "file": 9,
+        "key": "model.layers.5.self_attn.o_proj.weight"
+      },
+      "name": "model.layers.5.self_attn.o_proj.weight"
+    },
+    {
+      "location": {
+        "file": 9,
+        "key": "model.layers.5.post_attention_layernorm.weight"
+      },
+      "name": "model.layers.5.post_attention_layernorm.weight"
+    },
+    {
+      "location": {
+        "file": 9,
+        "key": "model.layers.5.mlp.gate.weight"
+      },
+      "name": "model.layers.5.mlp.gate.weight"
+    },
+    {
+      "location": {
+        "file": 13,
+        "key": "model.layers.5.mlp.experts.gate_up_proj"
+      },
+      "name": "model.layers.5.mlp.experts.gate_up_proj"
+    },
+    {
+      "location": {
+        "file": 13,
+        "key": "model.layers.5.mlp.experts.down_proj"
+      },
+      "name": "model.layers.5.mlp.experts.down_proj"
+    },
+    {
+      "location": {
+        "file": 9,
+        "key": "model.layers.5.mlp.shared_experts.gate_proj.weight"
+      },
+      "name": "model.layers.5.mlp.shared_experts.gate_proj.weight"
+    },
+    {
+      "location": {
+        "file": 9,
+        "key": "model.layers.5.mlp.shared_experts.up_proj.weight"
+      },
+      "name": "model.layers.5.mlp.shared_experts.up_proj.weight"
+    },
+    {
+      "location": {
+        "file": 9,
+        "key": "model.layers.5.mlp.shared_experts.down_proj.weight"
+      },
+      "name": "model.layers.5.mlp.shared_experts.down_proj.weight"
+    },
+    {
+      "location": {
+        "file": 10,
+        "key": "model.norm.weight"
+      },
+      "name": "model.norm.weight"
+    },
+    {
+      "location": {
+        "file": 0,
+        "key": "lm_head.weight"
+      },
+      "name": "lm_head.weight"
+    },
+    {
+      "location": {
+        "file": 5,
+        "key": "model.layers.3.mlp.gate.e_score_correction_bias"
+      },
+      "name": "model.layers.3.mlp.gate.e_score_correction_bias"
+    },
+    {
+      "location": {
+        "file": 7,
+        "key": "model.layers.4.mlp.gate.e_score_correction_bias"
+      },
+      "name": "model.layers.4.mlp.gate.e_score_correction_bias"
+    },
+    {
+      "location": {
+        "file": 9,
+        "key": "model.layers.5.mlp.gate.e_score_correction_bias"
+      },
+      "name": "model.layers.5.mlp.gate.e_score_correction_bias"
+    }
+  ],
+  "model_id": "/home/huggingface_hub/glm51-fp32-stacked",
+  "model_name": "GlmMoeDsaForCausalLM",
+  "version": 5
+}

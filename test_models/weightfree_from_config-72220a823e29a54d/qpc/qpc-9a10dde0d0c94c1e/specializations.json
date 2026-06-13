@@ -1,0 +1,12 @@
+{
+    "specializations":[
+        {
+            "name":"Prefill",
+            "symbols":{
+                "batch_size":"1",
+                "ctx_len":"256",
+                "seq_len":"1"
+            }
+        }
+    ]
+}
