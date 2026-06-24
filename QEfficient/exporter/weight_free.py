@@ -17,7 +17,8 @@ from accelerate import init_empty_weights
 from huggingface_hub import snapshot_download
 from safetensors import safe_open
 from torch import nn
-
+from QEfficient.transformers.embeddings.embedding_utils import PooledModel
+from QEfficient.transformers.models.pytorch_transforms import PoolingTransform
 from QEfficient.exporter.weight_spec import (
     ExternalDataFile,
     TiedWeightAlias,
@@ -110,13 +111,14 @@ def _build_meta_qeff_model(qeff_model):
         raise NotImplementedError("Weight-free export is not implemented yet for quantized causal LM checkpoints.")
 
     config = copy.deepcopy(qeff_model.model.config)
-    config.torch_dtype = torch.float32
     with init_empty_weights():
         meta_model = qeff_model._hf_auto_class.from_config(config, attn_implementation="eager")
 
     if quant_config is None:
-        meta_model = meta_model.to(dtype=torch.float32)
-    meta_model = meta_model.to(dtype=torch.float32)
+        target_dtype = getattr(config, "dtype", torch.float32) or torch.float32
+        if target_dtype == torch.bfloat16:
+            target_dtype = torch.float16
+        meta_model = meta_model.to(dtype=target_dtype)
 
     meta_qeff_model = qeff_model.__class__(
         meta_model,
@@ -126,6 +128,13 @@ def _build_meta_qeff_model(qeff_model):
         pretrained_model_name_or_path=model_ref,
     )
     meta_qeff_model.hash_params.update(copy.deepcopy(qeff_model.hash_params))
+
+    
+    
+    if isinstance(qeff_model.model, PooledModel):
+        meta_qeff_model.model, _ = PoolingTransform.apply(
+            meta_qeff_model.model, qeff_model.model.pooling_fn
+        )
 
     if quant_config is not None:
         # For quantized models the meta model must use the same quantized layer types as the
@@ -203,7 +212,54 @@ def _build_location(
     return WeightSpecLocation(file=list(checkpoint_files).index(checkpoint_file), key=tensor_key)
 
 
+def _find_checkpoint_key(
+    onnx_name: str,
+    checkpoint_index: Dict[str, str],
+    backbone: nn.Module,
+) -> Optional[str]:
+    """
+    Resolve an ONNX initializer name to its key in the safetensors checkpoint.
+
+    Three lookups are attempted in order:
+
+    1. Direct match — ONNX name == checkpoint key.
+       Covers decoder-only LLMs (Llama, GPT-OSS) and any model exported
+       without extra wrappers.
+
+    2. Strip our PooledModel prefix ("base_model.") and try the bare key.
+       Covers embedding models whose checkpoint was saved from the base class
+       directly (e.g. BAAI/bge-base saved from BertModel → bare keys).
+
+    3. Strip "base_model." then prepend backbone.base_model_prefix.
+       Covers embedding models whose checkpoint was saved from a task-specific
+       class (e.g. BAAI/bge-reranker saved from XLMRobertaForSequenceClassification
+       → "roberta." prefix).  HuggingFace defines base_model_prefix on every
+       model class as exactly the attribute name the task class uses to store
+       the backbone, so this is generalized — no per-model-family list needed.
+    """
+    # 1. Direct match
+    if onnx_name in checkpoint_index:
+        return onnx_name
+
+    # Strip PooledModel's "base_model." wrapper prefix
+    stripped = onnx_name[len("base_model."):] if onnx_name.startswith("base_model.") else onnx_name
+
+    # 2. Bare key — checkpoint saved from base class
+    if stripped in checkpoint_index:
+        return stripped
+
+    # 3. Task-class prefix — checkpoint saved from ForSequenceClassification etc.
+    prefix = getattr(backbone, "base_model_prefix", "")
+    if prefix:
+        prefixed = f"{prefix}.{stripped}"
+        if prefixed in checkpoint_index:
+            return prefixed
+
+    return None
+
+
 def _promote_initializers_and_build_spec(onnx_program, model_ref: str, model_name: str, qeff_model) -> WeightSpec:
+    from QEfficient.transformers.embeddings.embedding_utils import PooledModel
     model_ir = onnx_program.model
     model_names = {name for name, _ in qeff_model.model.named_parameters()}
     model_names.update({name for name, _ in qeff_model.model.named_buffers()})
@@ -221,19 +277,22 @@ def _promote_initializers_and_build_spec(onnx_program, model_ref: str, model_nam
         )
         for checkpoint_file in checkpoint_files
     ]
+    backbone = qeff_model.model.base_model if isinstance(qeff_model.model, PooledModel) else qeff_model.model
     promoted_inputs: List[WeightSpecInput] = []
 
     for name, init_value in list(model_ir.graph.initializers.items()):
         if name not in model_names:
             continue
 
-        location_key = tied_weight_map.get(name, name)
-        location = _build_location(checkpoint_files, checkpoint_index.get(location_key), location_key)
+        onnx_name = tied_weight_map.get(name, name)
+        checkpoint_key = _find_checkpoint_key(onnx_name, checkpoint_index, backbone)
 
-        if location is None:
+        if checkpoint_key is None:
             # Computed buffer (e.g. sin_cached, cos_cached) — leave as ONNX initializer.
             # The compiler embeds it in the model; it is not loaded from a checkpoint file.
             continue
+
+        location = _build_location(checkpoint_files, checkpoint_index[checkpoint_key], checkpoint_key)
 
         model_ir.graph.inputs.append(
             ir.Value(

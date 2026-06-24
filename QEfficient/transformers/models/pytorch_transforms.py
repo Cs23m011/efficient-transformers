@@ -743,6 +743,9 @@ class CustomOpsTransform(ModuleMappingTransform):
         Qwen3_5MoeRMSNorm: GemmaCustomRMSNormAIC,
         Qwen3_5RMSNormGated: QEffQwen3_5GatedDeltaNetCustomRMSNormAIC,
         Qwen3_5MoeRMSNormGated: QEffQwen3_5MoeGatedDeltaNetCustomRMSNormAIC,
+        # DeBERTaV2: replace DisentangledSelfAttention with ONNX-compatible version
+        # that avoids torch.tensor() constant creation inside subfunction bodies.
+        DisentangledSelfAttention: QEffDisentangledSelfAttention,
     }
 
 

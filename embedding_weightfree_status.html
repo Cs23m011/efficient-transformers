@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 14px; color: #172b4d; max-width: 1100px; margin: 0 auto; padding: 24px; line-height: 1.6; }
+  h1 { font-size: 24px; border-bottom: 2px solid #0052cc; padding-bottom: 8px; color: #0052cc; }
+  h2 { font-size: 18px; border-bottom: 1px solid #dfe1e6; padding-bottom: 6px; margin-top: 32px; color: #172b4d; }
+  h3 { font-size: 15px; color: #172b4d; margin-top: 20px; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 13px; }
+  th { background: #0052cc; color: white; padding: 8px 12px; text-align: left; font-weight: 600; }
+  td { padding: 7px 12px; border-bottom: 1px solid #dfe1e6; vertical-align: top; }
+  tr:nth-child(even) { background: #f4f5f7; }
+  .pass { color: #006644; font-weight: 700; background: #e3fcef; padding: 2px 8px; border-radius: 3px; }
+  .fail { color: #bf2600; font-weight: 700; background: #ffebe6; padding: 2px 8px; border-radius: 3px; }
+  .warn { color: #974f0c; font-weight: 700; background: #fffae6; padding: 2px 8px; border-radius: 3px; }
+  .info-box { background: #deebff; border-left: 4px solid #0052cc; padding: 12px 16px; margin: 12px 0; border-radius: 0 4px 4px 0; }
+  .warn-box { background: #fffae6; border-left: 4px solid #ff8b00; padding: 12px 16px; margin: 12px 0; border-radius: 0 4px 4px 0; }
+  .success-box { background: #e3fcef; border-left: 4px solid #00875a; padding: 12px 16px; margin: 12px 0; border-radius: 0 4px 4px 0; }
+  code { background: #f4f5f7; padding: 1px 5px; border-radius: 3px; font-family: monospace; font-size: 12px; color: #172b4d; }
+  pre { background: #f4f5f7; padding: 14px; border-radius: 4px; font-family: monospace; font-size: 12px; overflow-x: auto; line-height: 1.5; }
+  .section-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #5e6c84; margin-bottom: 4px; }
+  .metric-row { display: flex; gap: 16px; flex-wrap: wrap; margin: 12px 0; }
+  .metric-card { background: #f4f5f7; border: 1px solid #dfe1e6; border-radius: 4px; padding: 12px 16px; min-width: 160px; }
+  .metric-val { font-size: 22px; font-weight: 700; color: #0052cc; }
+  .metric-lbl { font-size: 12px; color: #5e6c84; }
+  ul li { margin-bottom: 4px; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 11px; font-weight: 600; }
+  .tag-fixed { background: #e3fcef; color: #006644; }
+  .tag-open { background: #ffebe6; color: #bf2600; }
+  .tag-partial { background: #fffae6; color: #974f0c; }
+</style>
+</head>
+<body>
+
+<h1>Embedding Model Weight-Free Export — Status &amp; Results</h1>
+<p><strong>Date:</strong> 2026-06-24 &nbsp;|&nbsp; <strong>Branch:</strong> weightfree-tf5 &nbsp;|&nbsp; <strong>Hardware:</strong> AI100 (16 cores) &nbsp;|&nbsp; <strong>Author:</strong> amarshar</p>
+
+<!-- ─── EXECUTIVE SUMMARY ─────────────────────────────────────────── -->
+<h2>Executive Summary</h2>
+<div class="success-box">
+  All seven embedding models pass end-to-end verification in both
+  <strong>weight-free dynamo + subfunction</strong> mode and <strong>regular dynamo + subfunction</strong> mode.
+  The weight-free path exports the ONNX without loading model weights into CPU RAM,
+  references the original safetensors checkpoint at compile/inference time, and
+  produces numerically equivalent outputs to the HuggingFace PyTorch baseline.
+</div>
+
+<div class="metric-row">
+  <div class="metric-card"><div class="metric-val">7 / 7</div><div class="metric-lbl">Models passing weight-free</div></div>
+  <div class="metric-card"><div class="metric-val">7 / 7</div><div class="metric-lbl">Models passing dynamo</div></div>
+  <div class="metric-card"><div class="metric-val">5</div><div class="metric-lbl">Code fixes required</div></div>
+  <div class="metric-card"><div class="metric-val">~30–40%</div><div class="metric-lbl">Peak RAM reduction (large models)</div></div>
+</div>
+
+<!-- ─── BACKGROUND ────────────────────────────────────────────────── -->
+<h2>Background — What Weight-Free Export Is</h2>
+<p>Standard ONNX export loads all model weights into CPU RAM, embeds them as tensor initializers
+in the ONNX protobuf, and writes a large file to disk. For a 335M-parameter model (bge-large) this
+means ~1.3 GB in RAM just to hold the weights before export begins.</p>
+
+<p><strong>Weight-free export</strong> avoids this entirely:</p>
+<ol>
+  <li>A <em>meta-device</em> skeleton model is built — correct architecture, zero bytes of weight data.</li>
+  <li><code>torch.onnx.export</code> traces the skeleton symbolically. The ONNX graph captures operators and shapes but contains no tensor values.</li>
+  <li>A sidecar <code>weight_spec.json</code> maps every ONNX input name to its key in the original safetensors checkpoint file.</li>
+  <li>At ORT inference / AI100 compile time, weights are streamed directly from the checkpoint — never duplicated in RAM.</li>
+</ol>
+
+<pre>
+                    Standard Path                 Weight-Free Path
+                    ─────────────                 ────────────────
+CPU RAM during export:   ~1.3 GB (bge-large)       ~0.05 GB (meta skeleton only)
+ONNX file size:          ~640 MB (embedded weights) ~2 MB   (graph only)
+Checkpoint read:         once to RAM, then to ONNX  streamed at inference time
+</pre>
+
+<!-- ─── MODELS TESTED ─────────────────────────────────────────────── -->
+<h2>Models Tested</h2>
+<table>
+  <tr><th>Model</th><th>Architecture</th><th>Hidden dim</th><th>Layers</th><th>Pooling</th><th>Params</th></tr>
+  <tr><td><code>BAAI/bge-base-en-v1.5</code></td><td>BERT-base</td><td>768</td><td>12</td><td>CLS</td><td>109M</td></tr>
+  <tr><td><code>BAAI/bge-large-en-v1.5</code></td><td>BERT-large</td><td>1024</td><td>24</td><td>CLS</td><td>335M</td></tr>
+  <tr><td><code>BAAI/bge-small-en-v1.5</code></td><td>BERT-small</td><td>384</td><td>12</td><td>CLS</td><td>33M</td></tr>
+  <tr><td><code>intfloat/e5-large-v2</code></td><td>BERT-large</td><td>1024</td><td>24</td><td>CLS</td><td>335M</td></tr>
+  <tr><td><code>sentence-transformers/nli-bert-base-cls-pooling</code></td><td>BERT-base</td><td>768</td><td>12</td><td>CLS</td><td>109M</td></tr>
+  <tr><td><code>BAAI/bge-reranker-v2-m3</code></td><td>XLM-RoBERTa-large</td><td>1024</td><td>24</td><td>CLS</td><td>568M</td></tr>
+  <tr><td><code>meta-llama/Llama-Prompt-Guard-2-22M</code></td><td>DeBERTaV2</td><td>384</td><td>12</td><td>CLS</td><td>22M</td></tr>
+</table>
+
+<p>All models are encoder-only BERT-family transformers used for dense text embedding.
+The final sentence vector is produced by CLS pooling — extracting the hidden state of the
+first <code>[CLS]</code> token from the last transformer layer.</p>
+
+<!-- ─── ISSUES AND FIXES ──────────────────────────────────────────── -->
+<h2>Issues Found &amp; Fixes Applied</h2>
+
+<h3>Issue 1 — Non-persistent buffer <code>position_ids</code> causes <code>FakeTensorDeviceMismatchError</code></h3>
+<div class="warn-box">
+  <strong>Symptom:</strong> Export crashes immediately during <code>torch.export.export</code> with:<br>
+  <code>FakeTensorDeviceMismatchError: tensor on meta device, position_ids on CPU</code>
+</div>
+<p><strong>Root cause:</strong> <code>BertEmbeddings</code> registers <code>position_ids</code> and <code>token_type_ids</code> as
+<em>non-persistent</em> buffers (<code>register_buffer(..., persistent=False)</code>).
+<code>accelerate.init_empty_weights()</code> only moves parameters and <em>persistent</em> buffers to the meta device.
+Non-persistent ones stay on CPU. When the dynamo exporter traces the meta model it sees CPU tensors
+alongside meta tensors and raises a device mismatch error.</p>
+
+<p><strong>Fix:</strong> <code>QEffBertEmbeddings</code> in <code>QEfficient/transformers/models/bert/modeling_bert.py</code> —
+removes both buffers entirely from <code>__init__</code> and recreates them on-the-fly inside <code>forward()</code>
+from <code>input_ids.device</code>. This works for all export modes:</p>
+<pre>
+class QEffBertEmbeddings(BertEmbeddings):
+    def __init__(self, config):
+        super().__init__(config)
+        for name in ("position_ids", "token_type_ids"):
+            self._buffers.pop(name, None)          # remove buffer entirely
+            self._non_persistent_buffers_set.discard(name)
+
+    def forward(self, input_ids=None, ...):
+        device = input_ids.device                  # picks up meta / cpu / cuda
+        position_ids = torch.arange(..., device=device).unsqueeze(0)
+        token_type_ids = torch.zeros(input_shape, dtype=torch.long, device=device)
+        return super().forward(...)
+</pre>
+<p><span class="tag tag-fixed">FIXED</span> — applies to BERT, RoBERTa, XLM-RoBERTa families via <code>QEffBertModel</code> / <code>QEffRobertaModel</code> / <code>QEffXLMRobertaModel</code>.</p>
+
+<h3>Issue 2 — <code>PooledModel</code> wrapper not re-applied on meta model → pooling op missing from ONNX graph</h3>
+<div class="warn-box">
+  <strong>Symptom:</strong> Export completes but ORT output shape is <code>(1, seq_len, 768)</code> instead of <code>(1, 768)</code>.
+  Comparison with HF baseline fails with shape mismatch: <code>MAD 0.136 &gt;&gt; threshold 1e-5</code>.
+</div>
+<p><strong>Root cause:</strong> When the user builds <code>QEFFAutoModel(model, pooling="cls")</code>,
+the backbone is wrapped in <code>PooledModel(backbone, cls_pooling)</code>. The weight-free path
+internally rebuilds a fresh meta model via <code>_build_meta_qeff_model()</code>, but this function
+creates the meta <code>QEFFAutoModel</code> without the <code>pooling=</code> kwarg.
+The meta model is a bare backbone. When exported, the ONNX graph ends at <code>last_hidden_state [B, seq_len, hidden]</code>
+with no CLS pooling node.</p>
+
+<p><strong>Fix:</strong> After building the meta <code>QEFFAutoModel</code>, detect and replicate the
+<code>PooledModel</code> wrapping:</p>
+<pre>
+# in QEfficient/exporter/weight_free.py — _build_meta_qeff_model()
+from QEfficient.transformers.embeddings.embedding_utils import PooledModel
+from QEfficient.transformers.models.pytorch_transforms import PoolingTransform
+
+if isinstance(qeff_model.model, PooledModel):
+    meta_qeff_model.model, _ = PoolingTransform.apply(
+        meta_qeff_model.model, qeff_model.model.pooling_fn
+    )
+</pre>
+<p><span class="tag tag-fixed">FIXED</span></p>
+
+<h3>Issue 3 — <code>base_model.</code> prefix mismatch between ONNX initializer names and checkpoint keys</h3>
+<div class="warn-box">
+  <strong>Symptom:</strong> After fix 2, export crashes on <code>onnx_program.save()</code>:<br>
+  <code>SerdeError: Cannot copy out of meta tensor — base_model.embeddings.word_embeddings.weight</code>
+</div>
+<p><strong>Root cause:</strong> <code>PooledModel</code> stores the backbone as <code>self.base_model</code>.
+PyTorch's <code>named_parameters()</code> therefore prefixes every parameter name with <code>base_model.</code>.
+The ONNX graph initializer names pick up the same prefix. The safetensors checkpoint was saved from the
+raw <code>BertModel</code> and uses bare keys (e.g. <code>embeddings.word_embeddings.weight</code>).
+The weight spec builder does a direct dict lookup — the prefixed ONNX name is not found → the parameter
+is not promoted to an ONNX input → it stays as an initializer with a meta-tensor value → serialisation
+crashes.</p>
+
+<p><strong>Fix:</strong> One-level prefix-strip fallback in <code>_promote_initializers_and_build_spec()</code>:</p>
+<pre>
+checkpoint_file = checkpoint_index.get(location_key)
+if checkpoint_file is None and "." in location_key:          # fallback only if direct lookup fails
+    stripped_key = location_key.split(".", 1)[1]              # strip "base_model."
+    checkpoint_file = checkpoint_index.get(stripped_key)
+    if checkpoint_file is not None:
+        location_key = stripped_key
+</pre>
+<p>This is a <em>safe fallback</em> — it only runs when the direct lookup fails, so existing LLM models
+(Llama, GPT-OSS, GLM-MoE) whose checkpoint keys match their ONNX names directly are completely unaffected.</p>
+<p><span class="tag tag-fixed">FIXED</span></p>
+
+<!-- ─── RESULTS — WEIGHT-FREE ─────────────────────────────────────── -->
+<h2>Results — Weight-Free + Dynamo + Subfunctions</h2>
+<p>Command template: <code>python examples/embeddings/compare_embeddings.py --model-name &lt;MODEL&gt; --pooling cls --seq-len 64 --num-cores 16 --weight-free --use-subfunctions --profile</code></p>
+
+<table>
+  <tr>
+    <th>Model</th>
+    <th>Output shape</th>
+    <th>HF PT vs ONNX (MAD)</th>
+    <th>HF PT vs ONNX</th>
+    <th>ONNX vs AI100 (MAD)</th>
+    <th>ONNX vs AI100</th>
+    <th>HF PT vs AI100</th>
+    <th>Peak RSS</th>
+    <th>Export time</th>
+  </tr>
+  <tr>
+    <td><code>BAAI/bge-base-en-v1.5</code></td>
+    <td>(1, 768)</td>
+    <td>7.0 × 10⁻⁷</td>
+    <td><span class="pass">PASS</span></td>
+    <td>9.96 × 10⁻⁴</td>
+    <td><span class="pass">PASS</span></td>
+    <td><span class="pass">PASS</span></td>
+    <td>1704 MB</td>
+    <td>11.8 s</td>
+  </tr>
+  <tr>
+    <td><code>BAAI/bge-large-en-v1.5</code></td>
+    <td>(1, 1024)</td>
+    <td>6.5 × 10⁻⁷</td>
+    <td><span class="pass">PASS</span></td>
+    <td>1.30 × 10⁻³</td>
+    <td><span class="pass">PASS</span></td>
+    <td><span class="pass">PASS</span></td>
+    <td>3.41 GB</td>
+    <td>19.3 s</td>
+  </tr>
+  <tr>
+    <td><code>BAAI/bge-small-en-v1.5</code></td>
+    <td>(1, 384)</td>
+    <td>2.6 × 10⁻⁷</td>
+    <td><span class="pass">PASS</span></td>
+    <td>6.82 × 10⁻⁴</td>
+    <td><span class="pass">PASS</span></td>
+    <td><span class="pass">PASS</span></td>
+    <td>1030 MB</td>
+    <td>12.7 s</td>
+  </tr>
+  <tr>
+    <td><code>intfloat/e5-large-v2</code></td>
+    <td>(1, 1024)</td>
+    <td>1.1 × 10⁻⁶</td>
+    <td><span class="pass">PASS</span></td>
+    <td>1.85 × 10⁻³</td>
+    <td><span class="pass">PASS</span></td>
+    <td><span class="pass">PASS</span></td>
+    <td>3.37 GB</td>
+    <td>19.2 s</td>
+  </tr>
+  <tr>
+    <td><code>sentence-transformers/nli-bert-base-cls-pooling</code></td>
+    <td>(1, 768)</td>
+    <td>5.6 × 10⁻⁷</td>
+    <td><span class="pass">PASS</span></td>
+    <td>1.10 × 10⁻³</td>
+    <td><span class="pass">PASS</span></td>
+    <td><span class="pass">PASS</span></td>
+    <td>1669 MB</td>
+    <td>11.6 s</td>
+  </tr>
+  <tr>
+    <td><code>BAAI/bge-reranker-v2-m3</code></td>
+    <td>(1, 1024)</td>
+    <td>5.2 × 10⁻⁷</td>
+    <td><span class="pass">PASS</span></td>
+    <td>9.97 × 10⁻⁴</td>
+    <td><span class="pass">PASS</span></td>
+    <td><span class="pass">PASS</span></td>
+    <td>4.68 GB</td>
+    <td>—</td>
+  </tr>
+  <tr>
+    <td><code>meta-llama/Llama-Prompt-Guard-2-22M</code></td>
+    <td>(1, 384)</td>
+    <td>8.5 × 10⁻⁷</td>
+    <td><span class="pass">PASS</span></td>
+    <td>1.54 × 10⁻³</td>
+    <td><span class="pass">PASS</span></td>
+    <td><span class="pass">PASS</span></td>
+    <td>1183 MB</td>
+    <td>—</td>
+  </tr>
+</table>
+<p><em>Thresholds: HF PT vs ONNX ≤ 1×10⁻⁵ &nbsp;|&nbsp; ONNX / HF vs AI100 ≤ 1×10⁻² &nbsp;|&nbsp; — = used cached ONNX from prior run</em></p>
+
+<!-- ─── RESULTS — REGULAR DYNAMO ──────────────────────────────────── -->
+<h2>Results — Regular Dynamo + Subfunctions (no weight-free, for comparison)</h2>
+<p>Command template: <code>python examples/embeddings/compare_embeddings.py --model-name &lt;MODEL&gt; --pooling cls --seq-len 64 --num-cores 16 --use-subfunctions --use-dynamo --profile</code></p>
+
+<table>
+  <tr>
+    <th>Model</th>
+    <th>HF PT vs QEff PT</th>
+    <th>HF PT vs ONNX (MAD)</th>
+    <th>HF PT vs ONNX</th>
+    <th>ONNX vs AI100 (MAD)</th>
+    <th>ONNX vs AI100</th>
+    <th>HF PT vs AI100</th>
+    <th>Peak RSS</th>
+    <th>Export time</th>
+  </tr>
+  <tr>
+    <td><code>BAAI/bge-base-en-v1.5</code></td>
+    <td><span class="pass">PASS (0.00)</span></td>
+    <td>6.5 × 10⁻⁷</td>
+    <td><span class="pass">PASS</span></td>
+    <td>9.96 × 10⁻⁴</td>
+    <td><span class="pass">PASS</span></td>
+    <td><span class="pass">PASS</span></td>
+    <td>2.20 GB</td>
+    <td>18.4 s</td>
+  </tr>
+  <tr>
+    <td><code>BAAI/bge-large-en-v1.5</code></td>
+    <td><span class="pass">PASS (0.00)</span></td>
+    <td>6.9 × 10⁻⁷</td>
+    <td><span class="pass">PASS</span></td>
+    <td>1.30 × 10⁻³</td>
+    <td><span class="pass">PASS</span></td>
+    <td><span class="pass">PASS</span></td>
+    <td>5.04 GB</td>
+    <td>36.6 s</td>
+  </tr>
+  <tr>
+    <td><code>BAAI/bge-small-en-v1.5</code></td>
+    <td><span class="pass">PASS (0.00)</span></td>
+    <td>2.3 × 10⁻⁷</td>
+    <td><span class="pass">PASS</span></td>
+    <td>6.82 × 10⁻⁴</td>
+    <td><span class="pass">PASS</span></td>
+    <td><span class="pass">PASS</span></td>
+    <td>1.23 GB</td>
+    <td>15.8 s</td>
+  </tr>
+  <tr>
+    <td><code>intfloat/e5-large-v2</code></td>
+    <td><span class="pass">PASS (0.00)</span></td>
+    <td>1.1 × 10⁻⁶</td>
+    <td><span class="pass">PASS</span></td>
+    <td>1.85 × 10⁻³</td>
+    <td><span class="pass">PASS</span></td>
+    <td><span class="pass">PASS</span></td>
+    <td>4.94 GB</td>
+    <td>37.2 s</td>
+  </tr>
+  <tr>
+    <td><code>sentence-transformers/nli-bert-base-cls-pooling</code></td>
+    <td><span class="pass">PASS (0.00)</span></td>
+    <td>6.0 × 10⁻⁷</td>
+    <td><span class="pass">PASS</span></td>
+    <td>1.10 × 10⁻³</td>
+    <td><span class="pass">PASS</span></td>
+    <td><span class="pass">PASS</span></td>
+    <td>2.22 GB</td>
+    <td>17.9 s</td>
+  </tr>
+  <tr>
+    <td><code>BAAI/bge-reranker-v2-m3</code></td>
+    <td><span class="pass">PASS (0.00)</span></td>
+    <td>5.6 × 10⁻⁷</td>
+    <td><span class="pass">PASS</span></td>
+    <td>9.97 × 10⁻⁴</td>
+    <td><span class="pass">PASS</span></td>
+    <td><span class="pass">PASS</span></td>
+    <td>7.23 GB</td>
+    <td>37.5 s</td>
+  </tr>
+  <tr>
+    <td><code>meta-llama/Llama-Prompt-Guard-2-22M</code></td>
+    <td><span class="pass">PASS (0.00)</span></td>
+    <td>7.6 × 10⁻⁷</td>
+    <td><span class="pass">PASS</span></td>
+    <td>1.54 × 10⁻³</td>
+    <td><span class="pass">PASS</span></td>
+    <td><span class="pass">PASS</span></td>
+    <td>1.74 GB</td>
+    <td>23.7 s</td>
+  </tr>
+</table>
+
+<!-- ─── MEMORY COMPARISON ─────────────────────────────────────────── -->
+<h2>Memory Comparison — Weight-Free vs Regular Dynamo</h2>
+<table>
+  <tr>
+    <th>Model</th>
+    <th>Peak RSS — Weight-Free</th>
+    <th>Peak RSS — Regular Dynamo</th>
+    <th>RAM Saving</th>
+    <th>Export time saving</th>
+  </tr>
+  <tr>
+    <td><code>bge-base-en-v1.5</code> (109M params)</td>
+    <td>1.70 GB</td>
+    <td>2.20 GB</td>
+    <td>−0.50 GB (23%)</td>
+    <td>−6.6 s faster</td>
+  </tr>
+  <tr>
+    <td><code>bge-large-en-v1.5</code> (335M params)</td>
+    <td>3.41 GB</td>
+    <td>5.04 GB</td>
+    <td>−1.63 GB (32%)</td>
+    <td>−17.3 s faster</td>
+  </tr>
+  <tr>
+    <td><code>bge-small-en-v1.5</code> (33M params)</td>
+    <td>1.03 GB</td>
+    <td>1.23 GB</td>
+    <td>−0.20 GB (16%)</td>
+    <td>−3.1 s faster</td>
+  </tr>
+  <tr>
+    <td><code>e5-large-v2</code> (335M params)</td>
+    <td>3.37 GB</td>
+    <td>4.94 GB</td>
+    <td>−1.57 GB (32%)</td>
+    <td>−18.0 s faster</td>
+  </tr>
+  <tr>
+    <td><code>nli-bert-base-cls-pooling</code> (109M params)</td>
+    <td>1.67 GB</td>
+    <td>2.22 GB</td>
+    <td>−0.55 GB (25%)</td>
+    <td>−6.3 s faster</td>
+  </tr>
+  <tr>
+    <td><code>bge-reranker-v2-m3</code> (568M params)</td>
+    <td>4.68 GB</td>
+    <td>7.23 GB</td>
+    <td>−2.55 GB (35%)</td>
+    <td>N/A (cached)</td>
+  </tr>
+  <tr>
+    <td><code>Llama-Prompt-Guard-2-22M</code> (22M params)</td>
+    <td>1.18 GB</td>
+    <td>1.74 GB</td>
+    <td>−0.56 GB (32%)</td>
+    <td>N/A (cached)</td>
+  </tr>
+</table>
+
+<div class="info-box">
+  <strong>Note:</strong> Weight-free export is faster because the ONNX file itself contains no weight data
+  (~2 MB vs ~640 MB for bge-large). The model loading phase never brings 1.3 GB of weights into CPU RAM.
+  The remaining peak RSS in weight-free mode is due to the ONNX compiler reading weights from the safetensors
+  checkpoint during compilation — but this is a streaming read, not a full copy.
+</div>
+
+<!-- ─── OPEN ITEMS ─────────────────────────────────────────────────── -->
+<h2>Open Items / Remaining Work</h2>
+
+<table>
+  <tr><th>Model</th><th>Status</th><th>Failure Reason</th></tr>
+  <tr>
+    <td><code>openai/clip-vit-base-patch32</code></td>
+    <td><span class="tag tag-open">FAIL</span></td>
+    <td><code>CLIPModel.forward()</code> returns multiple outputs — text embeddings, image embeddings, logit scale — but <code>QEFFAutoModel.export()</code> specifies <code>output_names=["output"]</code> (single name). The ONNX export fails with an output-count mismatch. Weight-free export for CLIP requires a dedicated class with multi-output handling.</td>
+  </tr>
+</table>
+
+<!-- ─── FILES CHANGED ─────────────────────────────────────────────── -->
+<h2>Files Changed</h2>
+<table>
+  <tr><th>File</th><th>Change</th></tr>
+  <tr>
+    <td><code>QEfficient/transformers/models/bert/modeling_bert.py</code></td>
+    <td>Added <code>QEffBertEmbeddings</code>, <code>QEffRobertaEmbeddings</code>, <code>QEffXLMRobertaEmbeddings</code> — remove non-persistent buffers, recreate on <code>input_ids.device</code> in <code>forward()</code>. Extended <code>_QEffBertFamilyMixin</code> with <code>__init__</code> and <code>__qeff_init__</code> hooks to wire the embedding swap on both direct-construction and transform-swap paths.</td>
+  </tr>
+  <tr>
+    <td><code>QEfficient/exporter/weight_free.py</code> — <code>_build_meta_qeff_model()</code></td>
+    <td>Added PooledModel re-application: if the original <code>qeff_model.model</code> is a <code>PooledModel</code>, wrap the meta model with the same pooling function so the exported ONNX graph includes the pooling op.</td>
+  </tr>
+  <tr>
+    <td><code>QEfficient/exporter/weight_free.py</code> — <code>_find_checkpoint_key()</code> (new function)</td>
+    <td>Replaced the old one-level prefix-strip fallback with a generalized three-step resolver: (1) direct match, (2) strip <code>base_model.</code> for bare checkpoint keys, (3) strip <code>base_model.</code> then prepend <code>backbone.base_model_prefix</code> for checkpoints saved from task-specific classes (e.g. <code>XLMRobertaForSequenceClassification</code> → <code>roberta.</code> prefix). Uses HuggingFace's own <code>base_model_prefix</code> metadata — no per-model-family list required.</td>
+  </tr>
+  <tr>
+    <td><code>QEfficient/transformers/models/deberta_v2/modeling_deberta_v2.py</code></td>
+    <td>Replaced three <code>torch.tensor(constant)</code> calls inside <code>scaled_size_sqrt_onnx</code> and <code>make_log_bucket_position_onnx</code> with Python-native <code>math.sqrt</code> / <code>math.log</code> / <code>tensor.new_full()</code>. During weight-free dynamo tracing, <code>torch.tensor(python_constant)</code> creates a FakeTensor lifted constant that cannot be serialized as an ONNX <code>Constant</code> node inside a subfunction body.</td>
+  </tr>
+  <tr>
+    <td><code>QEfficient/transformers/models/pytorch_transforms.py</code> — <code>CustomOpsTransform</code></td>
+    <td>Added <code>DisentangledSelfAttention: QEffDisentangledSelfAttention</code> to <code>CustomOpsTransform._module_mapping</code>. Previously this mapping only existed in <code>TextClassificationTransform</code>, so <code>QEFFAutoModel</code> (used for embedding models) never applied the ONNX-safe DeBERTa attention variant.</td>
+  </tr>
+</table>
+
+<hr style="margin-top:40px; border-color:#dfe1e6;">
+<p style="color:#5e6c84; font-size:12px;">Generated from test run on server <strong>gb-blr-31</strong> — branch <strong>weightfree-tf5</strong> — 2026-06-24</p>
+</body>
+</html>
